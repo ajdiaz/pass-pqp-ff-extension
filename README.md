@@ -203,8 +203,8 @@ entry names that are empty, absolute, or contain `..`.
 ```console
 $ make build      # package the extension into dist/*.zip
 $ make install    # install the native host and manifests
-$ make uninstall  # remove the host and manifests
-$ make clean      # remove dist/
+$ make uninstall  # remove every created file (host, manifests, dist/, web-ext-artifacts/)
+$ make clean      # remove build artifacts only (dist/, web-ext-artifacts/)
 ```
 
 The native host can be exercised directly with any JSON framing tool; a quick

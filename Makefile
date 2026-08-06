@@ -9,7 +9,7 @@ FIREFOX_NATIVE_DIR := $(HOME)/.mozilla/native-messaging-hosts
 LIBREWOLF_NATIVE_DIR := $(HOME)/.librewolf/native-messaging-hosts
 
 .PHONY: all build install install-host install-manifest uninstall uninstall-host \
-	uninstall-manifest write-manifest clean
+	uninstall-manifest uninstall-dist write-manifest clean
 
 all: build
 
@@ -53,11 +53,15 @@ write-manifest:
 #######################
 # Uninstall
 
-uninstall: uninstall-host uninstall-manifest
+uninstall: uninstall-host uninstall-manifest uninstall-dist
 
 uninstall-host:
 	rm -f $(HOST_DIR)/pass-pqp-host.sh
-	rmdir $(HOST_DIR) 2>/dev/null || true
+	@dir="$(HOST_DIR)"; \
+	while [ "$$dir" != "$(PREFIX)" ] && [ "$$dir" != "/" ] && [ "$$dir" != "$$HOME" ]; do \
+		rmdir "$$dir" 2>/dev/null || break; \
+		dir=$${dir%/*}; \
+	done
 	@echo "Removed $(HOST_DIR)/pass-pqp-host.sh"
 
 uninstall-manifest:
@@ -65,5 +69,9 @@ uninstall-manifest:
 	rm -f $(LIBREWOLF_NATIVE_DIR)/$(HOST_NAME).json
 	@echo "Removed native manifests"
 
+uninstall-dist:
+	rm -rf dist web-ext-artifacts
+	@echo "Removed build artifacts (dist/, web-ext-artifacts/)"
+
 clean:
-	rm -rf dist
+	rm -rf dist web-ext-artifacts
