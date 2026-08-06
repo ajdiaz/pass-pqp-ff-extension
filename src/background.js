@@ -4,7 +4,16 @@
 // native messaging manifest (see native/pass-pqp-host.json.in).
 const HOST_NAME = "pass_pqp_host";
 
-// Route messages coming from the popup to the native messaging host.
+// Default extension settings. Empty strings mean "use the native host
+// default" (environment variable or built-in default).
+const DEFAULT_SETTINGS = {
+    passPqpBin: "",
+    passwordStoreDir: "",
+    noPassphrase: true,
+};
+
+// Route messages coming from the popup or options page to the native
+// messaging host.
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     handleMessage(message, sendResponse);
     // keep the response channel open for the async work above
@@ -12,9 +21,9 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 /**
- * Handle a single message from the popup.
+ * Handle a single message from the popup or options page.
  *
- * @param {object}   message      Message from the popup
+ * @param {object}   message      Message
  * @param {function} sendResponse Callback to send the response
  * @return {void}
  */
@@ -37,6 +46,15 @@ async function handleMessage(message, sendResponse) {
                 }
                 response = await sendHostRequest({ action: "fetch", file: message.file });
                 break;
+            case "getConfig":
+                response = await getConfig();
+                break;
+            case "saveConfig":
+                if (!message.settings || typeof message.settings !== "object") {
+                    throw new Error("saveConfig requires a settings object");
+                }
+                response = await saveConfig(message.settings);
+                break;
             default:
                 throw new Error("Unknown action: " + message.action);
         }
@@ -47,14 +65,63 @@ async function handleMessage(message, sendResponse) {
 }
 
 /**
- * Send a request to the native messaging host and normalize the response.
+ * Load and normalize the extension settings from local storage.
+ *
+ * @return {Promise<{passPqpBin: string, passwordStoreDir: string, noPassphrase: boolean}>}
+ */
+async function getSettings() {
+    const stored = await browser.storage.local.get(DEFAULT_SETTINGS);
+    return sanitizeSettings(stored);
+}
+
+/**
+ * Normalize a raw settings object into the canonical shape.
+ *
+ * @param {object} raw Raw settings object
+ * @return {{passPqpBin: string, passwordStoreDir: string, noPassphrase: boolean}}
+ */
+function sanitizeSettings(raw) {
+    return {
+        passPqpBin: typeof raw.passPqpBin === "string" ? raw.passPqpBin.trim() : "",
+        passwordStoreDir:
+            typeof raw.passwordStoreDir === "string" ? raw.passwordStoreDir.trim() : "",
+        noPassphrase: raw.noPassphrase !== false,
+    };
+}
+
+/**
+ * Build the config override object sent to the native host, omitting empty
+ * settings so the host keeps its defaults.
+ *
+ * @param {object} settings Normalized settings
+ * @return {object} Config override object
+ */
+function buildConfig(settings) {
+    const config = {};
+    if (settings.passPqpBin) {
+        config.passPqpBin = settings.passPqpBin;
+    }
+    if (settings.passwordStoreDir) {
+        config.passwordStoreDir = settings.passwordStoreDir;
+    }
+    if (typeof settings.noPassphrase === "boolean") {
+        config.noPassphrase = settings.noPassphrase;
+    }
+    return config;
+}
+
+/**
+ * Send a request to the native messaging host, merged with the stored
+ * settings, and normalize the response.
  *
  * @param {object} request Request object for the native host
  * @return {object} Response from the host
  */
 async function sendHostRequest(request) {
+    const settings = await getSettings();
+    const fullRequest = Object.assign({}, request, { config: buildConfig(settings) });
     try {
-        const response = await browser.runtime.sendNativeMessage(HOST_NAME, request);
+        const response = await browser.runtime.sendNativeMessage(HOST_NAME, fullRequest);
         if (response && typeof response === "object") {
             return response;
         }
@@ -67,4 +134,29 @@ async function sendHostRequest(request) {
                 "Is the host installed and registered for this extension? Details: " + e.message,
         };
     }
+}
+
+/**
+ * Return the stored settings plus a host probe so the options page can show
+ * the effective configuration.
+ *
+ * @return {Promise<{status: string, settings: object, host: object}>}
+ */
+async function getConfig() {
+    const settings = await getSettings();
+    const host = await sendHostRequest({ action: "configure" });
+    return { status: "ok", settings, host };
+}
+
+/**
+ * Persist settings and probe the host with them.
+ *
+ * @param {object} rawSettings Raw settings from the options page
+ * @return {Promise<{status: string, settings: object, host: object}>}
+ */
+async function saveConfig(rawSettings) {
+    const settings = sanitizeSettings(rawSettings);
+    await browser.storage.local.set(settings);
+    const host = await sendHostRequest({ action: "configure" });
+    return { status: "ok", settings, host };
 }

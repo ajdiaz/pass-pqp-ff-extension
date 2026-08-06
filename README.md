@@ -149,6 +149,25 @@ url: https://github.com
 
 ## ⚙️ Configuration
 
+### Options page
+
+Open the extension's preferences via the add-on manager
+(`about:addons` → pass-pqp → ⚙) or right-click the toolbar icon →
+**Manage Extension**. The options page lets you set:
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `passPqpBin` | *empty* | Path to the `pass-pqp` binary. Empty falls back to `PASS_PQP_BIN` / `pass-pqp`. |
+| `passwordStoreDir` | *empty* | Location of the password store. Empty falls back to `PASSWORD_STORE_DIR` / `~/.password-store`. |
+| `noPassphrase` | on | Decrypt without a passphrase prompt (`PASS_PQP_NO_PASSPHRASE=1`). |
+
+The page also probes the host and shows the **effective** store directory,
+binary, and store status — so you can verify your settings immediately.
+
+Settings are stored with `browser.storage.local` and are merged into **every**
+native host request as a `config` object (see below). The browser never sends
+these settings anywhere except to your own native host.
+
 ### Native host environment variables
 
 | Variable | Default | Purpose |
@@ -159,11 +178,17 @@ url: https://github.com
 
 ### Native host protocol
 
-Requests and responses are JSON messages:
+Requests and responses are JSON messages. Every request may carry an optional
+`config` object that overrides the environment-based defaults **for that single
+message only** — overrides never leak into later messages:
 
 ```jsonc
-// request
-{"action": "list"}
+// request with config override
+{"action": "list", "config": {
+    "passPqpBin": "/home/alice/bin/pass-pqp",
+    "passwordStoreDir": "/home/alice/passwords",
+    "noPassphrase": true
+}}
 // response
 {"status": "ok", "files": ["github.com/alice", "*.example.com/service"]}
 
@@ -175,8 +200,12 @@ Requests and responses are JSON messages:
 // request
 {"action": "configure"}
 // response
-{"status": "ok", "version": "0.1.0", "storeDir": "/home/alice/.password-store", "passPqpBin": "pass-pqp"}
+{"status": "ok", "version": "0.1.0", "storeDir": "/home/alice/.password-store", "passPqpBin": "pass-pqp", "storeExists": true, "noPassphrase": true}
 ```
+
+The `configure` response reflects the *effective* configuration for that
+message, i.e. after applying any `config` override. The extension's options
+page uses this to display the active settings.
 
 Errors always return `{"status": "error", "message": "…"}`. The host rejects
 entry names that are empty, absolute, or contain `..`.
@@ -193,7 +222,8 @@ entry names that are empty, absolute, or contain `..`.
   passphrase prompt. Create keys with `pqp gen-key --no-passphrase`.
 - **No host permissions are requested** — the extension never reads page
   content, and only needs `tabs`/`activeTab` to read the current URL,
-  `nativeMessaging` to reach the host, and `clipboardWrite` to copy.
+  `nativeMessaging` to reach the host, `clipboardWrite` to copy, and `storage`
+  to keep your options page settings.
 - The extension does not transmit anything over the network.
 
 ---

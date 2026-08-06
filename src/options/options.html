@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>pass-pqp options</title>
+        <link rel="stylesheet" href="options.css" />
+    </head>
+    <body>
+        <main>
+            <header class="header">
+                <img class="logo" src="../icons/icon.svg" alt="pass-pqp" />
+                <h1>pass-pqp options</h1>
+            </header>
+
+            <section class="card">
+                <h2>Native host configuration</h2>
+                <p class="hint">
+                    Leave a field empty to fall back to the native host defaults
+                    (environment variables or built-in defaults).
+                </p>
+
+                <label for="passPqpBin">pass-pqp binary path</label>
+                <input
+                    id="passPqpBin"
+                    type="text"
+                    placeholder="pass-pqp"
+                    autocomplete="off"
+                    spellcheck="false"
+                />
+                <p class="help">
+                    Path to the <code>pass-pqp</code> binary. Defaults to
+                    <code>pass-pqp</code> in your PATH.
+                </p>
+
+                <label for="passwordStoreDir">Password store directory</label>
+                <input
+                    id="passwordStoreDir"
+                    type="text"
+                    placeholder="~/.password-store"
+                    autocomplete="off"
+                    spellcheck="false"
+                />
+                <p class="help">
+                    Location of the password store. Defaults to
+                    <code>$PASSWORD_STORE_DIR</code> or
+                    <code>~/.password-store</code>.
+                </p>
+
+                <label class="checkbox">
+                    <input id="noPassphrase" type="checkbox" checked />
+                    Decrypt without a passphrase prompt
+                </label>
+                <p class="help">
+                    Passes <code>--no-passphrase</code> to pqp decryption. Requires keys
+                    created with <code>pqp gen-key --no-passphrase</code>.
+                </p>
+
+                <div class="actions">
+                    <button id="save" type="button">Save</button>
+                    <span id="saveStatus" class="save-status" hidden></span>
+                </div>
+            </section>
+
+            <section class="card">
+                <h2>Host status</h2>
+                <dl id="hostInfo" class="host-info">
+                    <dt>Host version</dt>
+                    <dd id="hostVersion">&hellip;</dd>
+                    <dt>Effective store directory</dt>
+                    <dd id="hostStoreDir">&hellip;</dd>
+                    <dt>Effective pass-pqp binary</dt>
+                    <dd id="hostBinary">&hellip;</dd>
+                    <dt>Store exists</dt>
+                    <dd id="hostStoreExists">&hellip;</dd>
+                    <dt>No-passphrase decryption</dt>
+                    <dd id="hostNoPassphrase">&hellip;</dd>
+                </dl>
+                <p id="hostError" class="error" hidden></p>
+            </section>
+        </main>
+        <script src="options.js"></script>
+    </body>
+</html>

@@ -9,6 +9,15 @@
 #   {"action": "list"}                      -> every entry path in the store
 #   {"action": "fetch", "file": "<entry>"}  -> decrypted contents of an entry
 #
+# Every request may carry an optional "config" object that overrides the
+# environment-based defaults:
+#
+#   {"action": "list", "config": {
+#       "passPqpBin": "/path/to/pass-pqp",
+#       "passwordStoreDir": "/path/to/store",
+#       "noPassphrase": true
+#   }}
+#
 # The store paths returned by "list" are relative to the password store root
 # and have the `.pqp.enc` suffix stripped, e.g. "github.com/username".
 #
@@ -32,6 +41,14 @@ PREFIX="${PASSWORD_STORE_DIR:-$HOME/.password-store}"
 PREFIX="${PREFIX%/}"
 ENCFILE_SUFFIX=".pqp.enc"
 export PASS_PQP_NO_PASSPHRASE="${PASS_PQP_NO_PASSPHRASE:-1}"
+# Keep `pass-pqp` subprocesses pointed at the same store as this host.
+export PASSWORD_STORE_DIR="$PREFIX"
+
+# Environment-based defaults; per-message "config" overrides are layered on top
+# of these and never persist between messages.
+DEF_PASS_PQP_BIN="$PASS_PQP_BIN"
+DEF_PREFIX="$PREFIX"
+DEF_NO_PASSPHRASE="$PASS_PQP_NO_PASSPHRASE"
 
 # Temporary files created by action handlers, removed on exit.
 TMP_FILES=""
@@ -125,8 +142,39 @@ cmd_fetch() {
 }
 
 cmd_configure() {
+	store_exists=true
+	[ -d "$PREFIX" ] || store_exists=false
+	no_passphrase=true
+	[ "$PASS_PQP_NO_PASSPHRASE" = "1" ] || no_passphrase=false
 	send_ok "$(jq -nc --arg v "$HOST_VERSION" --arg d "$PREFIX" --arg b "$PASS_PQP_BIN" \
-		'{version:$v, storeDir:$d, passPqpBin:$b}')"
+		--argjson s "$store_exists" --argjson n "$no_passphrase" \
+		'{version:$v, storeDir:$d, passPqpBin:$b, storeExists:$s, noPassphrase:$n}')"
+}
+
+# Apply per-message configuration overrides on top of the environment-based
+# defaults. An absent config leaves the defaults untouched. Overrides never
+# persist between messages: every call starts from the environment defaults.
+apply_config() {
+	cfg="$1"
+	PASS_PQP_BIN="$DEF_PASS_PQP_BIN"
+	PREFIX="$DEF_PREFIX"
+	export PASS_PQP_NO_PASSPHRASE="$DEF_NO_PASSPHRASE"
+	export PASSWORD_STORE_DIR="$PREFIX"
+	[ -n "$cfg" ] || return 0
+	bin=$(printf '%s' "$cfg" | jq -r '.passPqpBin // empty' 2>/dev/null)
+	[ -n "$bin" ] && PASS_PQP_BIN="$bin"
+	dir=$(printf '%s' "$cfg" | jq -r '.passwordStoreDir // empty' 2>/dev/null)
+	if [ -n "$dir" ]; then
+		PREFIX="${dir%/}"
+		export PASSWORD_STORE_DIR="$PREFIX"
+	fi
+	if printf '%s' "$cfg" | jq -e 'has("noPassphrase")' >/dev/null 2>&1; then
+		nopp=$(printf '%s' "$cfg" | jq -r '.noPassphrase' 2>/dev/null)
+		case "$nopp" in
+			true|True|1) export PASS_PQP_NO_PASSPHRASE=1 ;;
+			false|False|0) export PASS_PQP_NO_PASSPHRASE=0 ;;
+		esac
+	fi
 }
 
 # ---- main loop -------------------------------------------------------------
@@ -134,6 +182,7 @@ cmd_configure() {
 handle() {
 	msg="$1"
 	action=$(printf '%s' "$msg" | jq -r '.action // empty' 2>/dev/null)
+	apply_config "$(printf '%s' "$msg" | jq -c '.config // empty' 2>/dev/null)"
 	case "$action" in
 		list) cmd_list ;;
 		fetch) cmd_fetch "$(printf '%s' "$msg" | jq -r '.file // empty' 2>/dev/null)" ;;
