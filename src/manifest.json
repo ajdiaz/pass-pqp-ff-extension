@@ -1,0 +1,33 @@
+{
+    "manifest_version": 3,
+    "name": "pass-pqp",
+    "version": "0.1.0",
+    "description": "Browse the pass-pqp password store entries that match the current domain and copy usernames and passwords.",
+    "author": "pass-pqp",
+    "homepage_url": "https://github.com/pass-pqp/pass-pqp-ff-extension",
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "pass-pqp@localhost",
+            "strict_min_version": "115.0",
+            "data_collection_permissions": {
+                "required": ["none"]
+            }
+        }
+    },
+    "background": {
+        "scripts": ["background.js"]
+    },
+    "action": {
+        "default_title": "pass-pqp",
+        "default_popup": "popup/popup.html",
+        "default_icon": "icons/icon.svg"
+    },
+    "icons": {
+        "16": "icons/icon.svg",
+        "32": "icons/icon.svg",
+        "48": "icons/icon.svg",
+        "96": "icons/icon.svg",
+        "128": "icons/icon.svg"
+    },
+    "permissions": ["activeTab", "tabs", "nativeMessaging", "clipboardWrite"]
+}

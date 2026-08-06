@@ -1,0 +1,7 @@
+{
+    "name": "pass_pqp_host",
+    "description": "Native messaging host that bridges the pass-pqp extension to the pass-pqp password manager.",
+    "path": "__HOST_PATH__",
+    "type": "stdio",
+    "allowed_extensions": ["__EXTENSION_ID__"]
+}
