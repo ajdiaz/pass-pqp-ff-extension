@@ -282,6 +282,14 @@ $ printf '\x1c\x00\x00\x00{"action":"configure"}' | native/pass-pqp-host.sh
 
 ---
 
+## 🔗 Links
+
+- 🏠 Project: <https://github.com/ajdiaz/pass-pqp-ff-extension>
+- 🗂️ Password store: <https://github.com/ajdiaz/pass-pqp>
+- 🧮 Backend: <https://github.com/ajdiaz/pqp>
+
+---
+
 ## 📜 License
 
 MIT.

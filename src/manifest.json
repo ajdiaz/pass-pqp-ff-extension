@@ -4,7 +4,7 @@
     "version": "0.1.0",
     "description": "Browse the pass-pqp password store entries that match the current domain and copy usernames and passwords.",
     "author": "pass-pqp",
-    "homepage_url": "https://github.com/pass-pqp/pass-pqp-ff-extension",
+    "homepage_url": "https://github.com/ajdiaz/pass-pqp-ff-extension",
     "browser_specific_settings": {
         "gecko": {
             "id": "pass-pqp@localhost",
