@@ -17,6 +17,13 @@
     "background": {
         "scripts": ["background.js"]
     },
+    "content_scripts": [
+        {
+            "matches": ["<all_urls>"],
+            "js": ["content/autofill.js"],
+            "run_at": "document_idle"
+        }
+    ],
     "action": {
         "default_title": "pass-pqp",
         "default_popup": "popup/popup.html",

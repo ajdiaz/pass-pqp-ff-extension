@@ -116,9 +116,26 @@ Then in Firefox / LibreWolf:
 1. Visit a site, e.g. `https://github.com/`.
 2. Click the pass-pqp toolbar icon.
 3. Every entry matching `github.com` appears in the dropdown.
-4. Click 👤 to copy the username or 🔑 to copy the password.
+4. Click 👤 to copy the username, 🔑 to copy the password, or the **autofill**
+   button to fill the page's login form directly.
 5. No matching entry? Type in the search box to filter the whole store by
    entry name (e.g. `alice` finds `github.com/alice` even on `gitlab.com`).
+
+### Autofill
+
+The autofill button finds the login form on the current page and fills it:
+
+- **Password field** — the first `input[type="password"]`, or any input whose
+  tag or attributes (id, name, class, placeholder, …) contain the word
+  `password`.
+- **Username field** — an `input[type="email"]` or `input[type="text"]` whose
+  tag or attributes contain the word `user` or `login`.
+
+The password is the first line of the decrypted entry; the username comes from
+the first `user:` or `login:` line (e.g. `login: alice` or `user:alice`).
+Other lines are ignored. Values are written with native setters and `input` +
+`change` events are dispatched so framework bindings (React, Vue, …) pick them
+up.
 
 ---
 
@@ -237,10 +254,12 @@ entry names that are empty, absolute, or contain `..`.
   (`passwordTool`, e.g. `pinentry` or `ssh-askpass`) that answers the
   passphrase prompt. A browser popup cannot answer a terminal prompt itself,
   so one of the two is mandatory.
-- **No host permissions are requested** — the extension never reads page
-  content, and only needs `tabs`/`activeTab` to read the current URL,
-  `nativeMessaging` to reach the host, `clipboardWrite` to copy, and `storage`
-  to keep your options page settings.
+- **Minimal host permissions.** The extension needs `tabs`/`activeTab` to read
+  the current URL, `nativeMessaging` to reach the host, `clipboardWrite` to
+  copy, and `storage` for the options. The autofill content script runs on
+  every page (`<all_urls>`) but only acts on explicit autofill messages sent
+  by the popup — it reads or modifies page content only when you click the
+  autofill button.
 - The extension does not transmit anything over the network.
 
 ---

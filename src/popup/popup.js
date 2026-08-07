@@ -17,6 +17,14 @@ const ICON_KEY = [
     { tag: "path", attrs: { d: "M14 9l2 2" } },
 ];
 
+const ICON_AUTOFILL = [
+    { tag: "path", attrs: { d: "M4 7h16" } },
+    { tag: "path", attrs: { d: "M4 12h10" } },
+    { tag: "path", attrs: { d: "M4 17h6" } },
+    { tag: "path", attrs: { d: "M15 14l4 4" } },
+    { tag: "path", attrs: { d: "M15 14h3v-3" } },
+];
+
 let toastTimer = null;
 let currentHostname = null;
 let allFiles = [];
@@ -238,6 +246,7 @@ function buildEntry(path) {
     actions.appendChild(
         buildAction("Copy password", ICON_KEY, () => copyField(path, "password"))
     );
+    actions.appendChild(buildAction("Autofill form", ICON_AUTOFILL, () => autofillField(path)));
 
     const name = document.createElement("div");
     name.className = "name";
@@ -307,6 +316,36 @@ async function copyField(path, field) {
     }
     await copyText(value);
     showToast("Copied " + field);
+}
+
+/**
+ * Fetch an entry and ask the content script of the current page to fill the
+ * login form with its password and username.
+ *
+ * @param {string} path Entry path
+ * @return {Promise<void>}
+ */
+async function autofillField(path) {
+    const response = await browser.runtime.sendMessage({ action: "fetchEntry", file: path });
+    if (response.status !== "ok") {
+        showToast("Error: " + response.message);
+        return;
+    }
+    const entry = parseEntry(response.contents);
+    if (!entry.password) {
+        showToast("No password found for " + path);
+        return;
+    }
+    const autofill = await browser.runtime.sendMessage({
+        action: "autofill",
+        password: entry.password,
+        user: entry.user || "",
+    });
+    if (autofill.status !== "ok") {
+        showToast("Error: " + autofill.message);
+        return;
+    }
+    showToast("Autofilled " + path);
 }
 
 /**

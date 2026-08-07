@@ -48,6 +48,12 @@ async function handleMessage(message, sendResponse) {
                 }
                 response = await sendHostRequest({ action: "fetch", file: message.file });
                 break;
+            case "autofill":
+                if (typeof message.password !== "string") {
+                    throw new Error("autofill requires a password");
+                }
+                response = await autofillPage(message.password, message.user);
+                break;
             case "getConfig":
                 response = await getConfig();
                 break;
@@ -169,4 +175,37 @@ async function saveConfig(rawSettings) {
     await browser.storage.local.set(settings);
     const host = await sendHostRequest({ action: "configure" });
     return { status: "ok", settings, host };
+}
+
+/**
+ * Ask the content script of the active tab to autofill a login form.
+ *
+ * @param {string} password Password value
+ * @param {string} user     Username value, may be empty
+ * @return {Promise<object>} Content script response or an error
+ */
+async function autofillPage(password, user) {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs && tabs[0];
+    if (!tab || typeof tab.id !== "number") {
+        return { status: "error", message: "No active tab available" };
+    }
+    try {
+        const response = await browser.tabs.sendMessage(tab.id, {
+            action: "autofill",
+            password,
+            user: typeof user === "string" ? user : "",
+        });
+        if (response && typeof response === "object") {
+            return response;
+        }
+        return { status: "error", message: "Autofill script returned an empty response" };
+    } catch (e) {
+        return {
+            status: "error",
+            message:
+                "Unable to autofill this page. The autofill script may not be loaded. Details: " +
+                e.message,
+        };
+    }
 }
