@@ -18,23 +18,21 @@ const ICON_KEY = [
 ];
 
 let toastTimer = null;
+let currentHostname = null;
+let allFiles = [];
 
 init();
 
 /**
- * Main entry point: resolve the current domain, list matching entries and
- * render them.
+ * Main entry point: resolve the current domain, list all entries and show the
+ * domain matches, or the search results when the user has typed a query.
  *
  * @return {Promise<void>}
  */
 async function init() {
     try {
-        const hostname = await getCurrentHostname();
-        $("domain").textContent = hostname || "No domain";
-        if (!hostname) {
-            showNotice("This page does not have a domain.");
-            return;
-        }
+        currentHostname = await getCurrentHostname();
+        $("domain").textContent = currentHostname || "No domain";
 
         const hostCheck = await browser.runtime.sendMessage({ action: "checkHost" });
         if (hostCheck.status !== "ok") {
@@ -48,16 +46,23 @@ async function init() {
             showNotice(listResponse.message);
             return;
         }
+        allFiles = (listResponse.files || []).slice().sort();
 
-        const matches = listResponse.files
-            .filter((path) => matchesEntryPath(path, hostname))
-            .sort();
+        $("search").addEventListener("input", () => {
+            const query = $("search").value.trim();
+            if (query) {
+                renderSearchResults(query);
+            } else {
+                renderDomainMatches();
+            }
+        });
 
-        if (matches.length === 0) {
-            showEmpty("No matching entries for " + hostname);
-            return;
+        const query = $("search").value.trim();
+        if (query) {
+            renderSearchResults(query);
+        } else {
+            renderDomainMatches();
         }
-        renderEntries(matches);
     } catch (e) {
         showNotice(e.message);
     }
@@ -153,6 +158,68 @@ function renderEntries(paths) {
     for (const path of paths) {
         list.appendChild(buildEntry(path));
     }
+}
+
+/**
+ * Render the entries that match the current domain, or an empty state.
+ *
+ * @return {void}
+ */
+function renderDomainMatches() {
+    clearEntries();
+    if (!currentHostname) {
+        showEmpty("No domain on this page. Use the search box to find an entry.");
+        return;
+    }
+    const matches = allFiles.filter((path) => matchesEntryPath(path, currentHostname));
+    if (matches.length === 0) {
+        showEmpty("No matching entries for " + currentHostname);
+        return;
+    }
+    renderEntries(matches);
+}
+
+/**
+ * Filter the full entry list with a case-insensitive substring query.
+ *
+ * @param {string[]} paths All entry paths
+ * @param {string}   query Search query
+ * @return {string[]} Matching entry paths
+ */
+function filterByQuery(paths, query) {
+    const q = query.trim().toLowerCase();
+    if (!q) {
+        return [];
+    }
+    return paths.filter((path) => path.toLowerCase().includes(q));
+}
+
+/**
+ * Render the search results for a query, or an empty state.
+ *
+ * @param {string} query Search query
+ * @return {void}
+ */
+function renderSearchResults(query) {
+    clearEntries();
+    const matches = filterByQuery(allFiles, query);
+    if (matches.length === 0) {
+        showEmpty('No entries matching "' + query + '"');
+        return;
+    }
+    renderEntries(matches);
+}
+
+/**
+ * Remove all rendered entries and hide the entries list.
+ *
+ * @return {void}
+ */
+function clearEntries() {
+    const list = $("entries");
+    list.hidden = true;
+    list.textContent = "";
+    $("empty").hidden = true;
 }
 
 /**

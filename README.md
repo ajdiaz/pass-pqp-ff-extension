@@ -5,7 +5,9 @@ password store to Firefox and LibreWolf.
 
 Click the toolbar icon and the popup shows every store entry whose domain
 matches the **current page's domain** (glob-aware). Each entry gets two
-buttons: one to copy the **username** and one to copy the **password**.
+buttons: one to copy the **username** and one to copy the **password**. If no
+entry matches the domain, or you are looking for something specific, type in
+the **search box** to filter the whole store by name.
 
 ---
 
@@ -14,6 +16,9 @@ buttons: one to copy the **username** and one to copy the **password**.
 - 🔎 **Domain matching with globs** — entries like `github.com/username` match
   the current host; `*.example.com/service` matches any subdomain of
   `example.com`.
+- 🔍 **Search the whole store** — when no entry matches the current domain (or
+  any time), type in the popup's search box to filter every entry by name
+  (case-insensitive substring).
 - 📋 **One-click copy** — copy the username or the password straight to the
   clipboard.
 - 🔐 **Native messaging** — a thin native host bridges the extension to the
@@ -112,6 +117,8 @@ Then in Firefox / LibreWolf:
 2. Click the pass-pqp toolbar icon.
 3. Every entry matching `github.com` appears in the dropdown.
 4. Click 👤 to copy the username or 🔑 to copy the password.
+5. No matching entry? Type in the search box to filter the whole store by
+   entry name (e.g. `alice` finds `github.com/alice` even on `gitlab.com`).
 
 ---
 

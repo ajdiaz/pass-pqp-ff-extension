@@ -66,6 +66,31 @@ body {
     white-space: nowrap;
 }
 
+.search-wrap {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-2);
+}
+
+.search-wrap input {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--fg);
+    font-size: 13px;
+}
+
+.search-wrap input::placeholder {
+    color: var(--fg-dim);
+}
+
+.search-wrap input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
 .notice {
     margin: 10px 12px;
     padding: 8px 10px;
