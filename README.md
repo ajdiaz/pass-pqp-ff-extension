@@ -1,6 +1,6 @@
 # 🔐 pass-pqp Firefox / LibreWolf extension
 
-A minimal browser extension that brings the [`pass-pqp`](https://github.com/pass-pqp/pass-pqp)
+A minimal browser extension that brings the [`pass-pqp`](https://github.com/ajdiaz/pass-pqp)
 password store to Firefox and LibreWolf.
 
 Click the toolbar icon and the popup shows every store entry whose domain
@@ -70,7 +70,7 @@ browserpass approach.
 
 - **Browser**: Firefox ≥ 115 or LibreWolf.
 - **Store**: a `pass-pqp` password store (`pass-pqp init …`, see the
-  [pass-pqp README](https://github.com/pass-pqp/pass-pqp)).
+  [pass-pqp README](https://github.com/ajdiaz/pass-pqp)).
 - **Host tools**: POSIX `sh`, [`jq`](https://jqlang.github.io/jq/), `dd`,
   `od`, `find`, `sed` — all standard on Linux.
 - **Keys**: the recipient key must be usable **without a passphrase**
