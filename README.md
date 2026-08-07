@@ -57,9 +57,9 @@ invocations:
 
 | Action | CLI call | Returns |
 |---|---|---|
-| `configure` | — | host version, store directory, `pass-pqp` / `pqp` binary paths |
+| `configure` | — | host version, store directory, `pass-pqp` / `pqp` / password tool |
 | `list` | `find` over `*.pqp.enc` | every store-relative entry path |
-| `fetch` | `pass-pqp show <entry>`, or `pqp decrypt` when configured with the raw `pqp` CLI | the decrypted entry contents |
+| `fetch` | `pass-pqp show <entry>`, or `pqp decrypt` when configured with the raw `pqp` CLI (each with `--no-passphrase` or `--password-tool`) | the decrypted entry contents |
 
 The domain matching itself happens in the extension (popup), following the
 browserpass approach.
@@ -167,10 +167,12 @@ Open the extension's preferences via the add-on manager
 | `passPqpBin` | *empty* | Path to the `pass-pqp` wrapper **or** the raw `pqp` CLI. Empty falls back to `PASS_PQP_BIN` / `pass-pqp`. The host probes the binary: `show` for the wrapper, `decrypt` for the raw CLI. |
 | `pqpBin` | *empty* | Path to the raw `pqp` CLI. Only needed when `passPqpBin` points at the `pass-pqp` wrapper, so the wrapper can find `pqp` (the browser environment usually does not have it on PATH). Empty falls back to `PASS_PQP_PQP_BIN` / `pqp`. |
 | `passwordStoreDir` | *empty* | Location of the password store. Empty falls back to `PASSWORD_STORE_DIR` / `~/.password-store`. |
-| `noPassphrase` | on | Decrypt without a passphrase prompt (`PASS_PQP_NO_PASSPHRASE=1`). |
+| `noPassphrase` | on | Decrypt without a passphrase prompt (`PASS_PQP_NO_PASSPHRASE=1`). One of `noPassphrase` or `passwordTool` is mandatory. |
+| `passwordTool` | *none* | External passphrase prompt tool passed as `--password-tool` (e.g. `pinentry`, `ssh-askpass`). Used only when `noPassphrase` is off; one of the two is mandatory. |
 
 The page also probes the host and shows the **effective** store directory,
-binaries, and store status — so you can verify your settings immediately.
+binaries, password tool, and store status — so you can verify your settings
+immediately.
 
 Settings are stored with `browser.storage.local` and are merged into **every**
 native host request as a `config` object (see below). The browser never sends
@@ -182,6 +184,7 @@ these settings anywhere except to your own native host.
 |---|---|---|
 | `PASS_PQP_BIN` | `pass-pqp` | Path to the `pass-pqp` wrapper or the raw `pqp` CLI. |
 | `PASS_PQP_PQP_BIN` | *unset* | Path to the raw `pqp` CLI, exported to `pass-pqp` wrapper subprocesses. |
+| `PASS_PQP_PASSWORD_TOOL` | *unset* | External passphrase prompt tool, forwarded to decryption as `--password-tool`. |
 | `PASSWORD_STORE_DIR` | `~/.password-store` | Location of the password store. |
 | `PASS_PQP_NO_PASSPHRASE` | `1` | Decrypt without a passphrase prompt. Set to `0` only if you handle prompts yourself (not recommended in the browser). |
 
@@ -196,8 +199,9 @@ message only** — overrides never leak into later messages:
 {"action": "list", "config": {
     "passPqpBin": "/home/alice/bin/pass-pqp",
     "pqpBin": "/home/alice/bin/pqp",
+    "passwordTool": "pinentry",
     "passwordStoreDir": "/home/alice/passwords",
-    "noPassphrase": true
+    "noPassphrase": false
 }}
 // response
 {"status": "ok", "files": ["github.com/alice", "*.example.com/service"]}
@@ -210,7 +214,7 @@ message only** — overrides never leak into later messages:
 // request
 {"action": "configure"}
 // response
-{"status": "ok", "version": "0.1.0", "storeDir": "/home/alice/.password-store", "passPqpBin": "pass-pqp", "pqpBin": "/home/alice/bin/pqp", "storeExists": true, "noPassphrase": true}
+{"status": "ok", "version": "0.1.0", "storeDir": "/home/alice/.password-store", "passPqpBin": "pass-pqp", "pqpBin": "/home/alice/bin/pqp", "passwordTool": "pinentry", "storeExists": true, "noPassphrase": false}
 ```
 
 The `configure` response reflects the *effective* configuration for that
@@ -227,9 +231,12 @@ entry names that are empty, absolute, or contain `..`.
 - **The store lives on your machine** and is accessed through `pass-pqp`; the
   browser only ever sees the decrypted contents of the single entry you ask
   for.
-- **Passphrase-less keys required.** The host runs decryption with
-  `PASS_PQP_NO_PASSPHRASE=1` because a browser popup cannot answer a terminal
-  passphrase prompt. Create keys with `pqp gen-key --no-passphrase`.
+- **Passphrase handling.** Decryption needs exactly one of two modes: either
+  passphrase-less keys (`noPassphrase` on, keys created with
+  `pqp gen-key --no-passphrase`), or an external password tool
+  (`passwordTool`, e.g. `pinentry` or `ssh-askpass`) that answers the
+  passphrase prompt. A browser popup cannot answer a terminal prompt itself,
+  so one of the two is mandatory.
 - **No host permissions are requested** — the extension never reads page
   content, and only needs `tabs`/`activeTab` to read the current URL,
   `nativeMessaging` to reach the host, `clipboardWrite` to copy, and `storage`

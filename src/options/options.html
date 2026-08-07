@@ -72,7 +72,26 @@
                 </label>
                 <p class="help">
                     Passes <code>--no-passphrase</code> to pqp decryption. Requires keys
-                    created with <code>pqp gen-key --no-passphrase</code>.
+                    created with <code>pqp gen-key --no-passphrase</code>. When
+                    disabled, a password tool below becomes mandatory.
+                </p>
+
+                <label for="passwordTool">Password tool</label>
+                <select id="passwordTool" disabled>
+                    <option value="">(none)</option>
+                    <option value="pinentry">pinentry</option>
+                    <option value="pinentry-curses">pinentry-curses</option>
+                    <option value="pinentry-gnome3">pinentry-gnome3</option>
+                    <option value="ssh-askpass">ssh-askpass</option>
+                </select>
+                <p class="help">
+                    External passphrase prompt tool passed as
+                    <code>--password-tool</code> to pqp decryption. Only used when
+                    <b>Decrypt without a passphrase prompt</b> is off. Either
+                    no-passphrase or a password tool is mandatory. Tools whose name
+                    contains <code>pinentry</code> use the Assuan protocol; others
+                    are called as <code>&lt;tool&gt; &lt;prompt&gt;</code> reading the
+                    passphrase from stdout.
                 </p>
 
                 <div class="actions">
@@ -92,6 +111,8 @@
                     <dd id="hostBinary">&hellip;</dd>
                     <dt>Effective pqp binary</dt>
                     <dd id="hostPqpBinary">&hellip;</dd>
+                    <dt>Effective password tool</dt>
+                    <dd id="hostPasswordTool">&hellip;</dd>
                     <dt>Store exists</dt>
                     <dd id="hostStoreExists">&hellip;</dd>
                     <dt>No-passphrase decryption</dt>

@@ -22,11 +22,23 @@ async function init() {
         $("pqpBin").value = response.settings.pqpBin;
         $("passwordStoreDir").value = response.settings.passwordStoreDir;
         $("noPassphrase").checked = response.settings.noPassphrase;
+        $("passwordTool").value = response.settings.passwordTool;
+        syncPasswordToolField();
         renderHostInfo(response.host);
     } catch (e) {
         showError(e.message);
     }
+    $("noPassphrase").addEventListener("change", syncPasswordToolField);
     $("save").addEventListener("click", saveConfig);
+}
+
+/**
+ * Enable the password tool field only when no-passphrase decryption is off.
+ *
+ * @return {void}
+ */
+function syncPasswordToolField() {
+    $("passwordTool").disabled = $("noPassphrase").checked;
 }
 
 /**
@@ -40,7 +52,15 @@ async function saveConfig() {
         pqpBin: $("pqpBin").value.trim(),
         passwordStoreDir: $("passwordStoreDir").value.trim(),
         noPassphrase: $("noPassphrase").checked,
+        passwordTool: $("passwordTool").value,
     };
+    if (!settings.noPassphrase && !settings.passwordTool) {
+        showError(
+            "Either enable \u201cDecrypt without a passphrase prompt\u201d or select a password tool \u2014 one of the two is mandatory."
+        );
+        setSaveStatus("");
+        return;
+    }
     setSaveStatus("Saving\u2026");
     try {
         const response = await browser.runtime.sendMessage({
@@ -75,6 +95,7 @@ function renderHostInfo(host) {
         $("hostStoreDir").textContent = "\u2014";
         $("hostBinary").textContent = "\u2014";
         $("hostPqpBinary").textContent = "\u2014";
+        $("hostPasswordTool").textContent = "\u2014";
         $("hostStoreExists").textContent = "\u2014";
         $("hostNoPassphrase").textContent = "\u2014";
         return;
@@ -84,6 +105,7 @@ function renderHostInfo(host) {
     $("hostStoreDir").textContent = host.storeDir;
     $("hostBinary").textContent = host.passPqpBin || "\u2014";
     $("hostPqpBinary").textContent = host.pqpBin || "\u2014";
+    $("hostPasswordTool").textContent = host.passwordTool || "\u2014";
     $("hostStoreExists").textContent = host.storeExists ? "yes" : "no";
     $("hostNoPassphrase").textContent = host.noPassphrase ? "on" : "off";
 }

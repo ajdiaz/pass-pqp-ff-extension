@@ -9,6 +9,7 @@ const HOST_NAME = "pass_pqp_host";
 const DEFAULT_SETTINGS = {
     passPqpBin: "",
     pqpBin: "",
+    passwordTool: "",
     passwordStoreDir: "",
     noPassphrase: true,
 };
@@ -68,7 +69,7 @@ async function handleMessage(message, sendResponse) {
 /**
  * Load and normalize the extension settings from local storage.
  *
- * @return {Promise<{passPqpBin: string, pqpBin: string, passwordStoreDir: string, noPassphrase: boolean}>}
+ * @return {Promise<{passPqpBin: string, pqpBin: string, passwordTool: string, passwordStoreDir: string, noPassphrase: boolean}>}
  */
 async function getSettings() {
     const stored = await browser.storage.local.get(DEFAULT_SETTINGS);
@@ -79,12 +80,13 @@ async function getSettings() {
  * Normalize a raw settings object into the canonical shape.
  *
  * @param {object} raw Raw settings object
- * @return {{passPqpBin: string, pqpBin: string, passwordStoreDir: string, noPassphrase: boolean}}
+ * @return {{passPqpBin: string, pqpBin: string, passwordTool: string, passwordStoreDir: string, noPassphrase: boolean}}
  */
 function sanitizeSettings(raw) {
     return {
         passPqpBin: typeof raw.passPqpBin === "string" ? raw.passPqpBin.trim() : "",
         pqpBin: typeof raw.pqpBin === "string" ? raw.pqpBin.trim() : "",
+        passwordTool: typeof raw.passwordTool === "string" ? raw.passwordTool.trim() : "",
         passwordStoreDir:
             typeof raw.passwordStoreDir === "string" ? raw.passwordStoreDir.trim() : "",
         noPassphrase: raw.noPassphrase !== false,
@@ -105,6 +107,9 @@ function buildConfig(settings) {
     }
     if (settings.pqpBin) {
         config.pqpBin = settings.pqpBin;
+    }
+    if (settings.passwordTool) {
+        config.passwordTool = settings.passwordTool;
     }
     if (settings.passwordStoreDir) {
         config.passwordStoreDir = settings.passwordStoreDir;

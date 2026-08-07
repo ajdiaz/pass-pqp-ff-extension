@@ -15,8 +15,9 @@
 #   {"action": "list", "config": {
 #       "passPqpBin": "/path/to/pass-pqp",
 #       "pqpBin": "/path/to/pqp",
+#       "passwordTool": "pinentry",
 #       "passwordStoreDir": "/path/to/store",
-#       "noPassphrase": true
+#       "noPassphrase": false
 #   }}
 #
 # `passPqpBin` may point at either the pass-pqp wrapper or the raw pqp CLI.
@@ -27,6 +28,10 @@
 # runs `show`. When the wrapper is used, `pqpBin` (optional) tells it where the
 # raw pqp CLI lives; the browser environment usually does not have it on PATH.
 #
+# Decryption requires exactly one of two passphrase modes: either
+# "noPassphrase" (true, empty passphrase keys) or "passwordTool" (an external
+# prompt tool such as pinentry or ssh-askpass). One of the two is mandatory.
+#
 # The store paths returned by "list" are relative to the password store root
 # and have the `.pqp.enc` suffix stripped, e.g. "github.com/username".
 #
@@ -35,6 +40,8 @@
 #                           (default: pass-pqp)
 #   PASS_PQP_PQP_BIN        path to the raw pqp CLI; exported to the pass-pqp
 #                           wrapper so it can find pqp (default: unset)
+#   PASS_PQP_PASSWORD_TOOL  external passphrase prompt tool, forwarded to the
+#                           decryption as --password-tool (default: unset)
 #   PASSWORD_STORE_DIR      password store location (default: ~/.password-store)
 #   PASS_PQP_NO_PASSPHRASE  pass "1" to decrypt without prompting for a
 #                           passphrase (default: "1", requires keys that were
@@ -53,6 +60,9 @@ PASS_PQP_BIN="${PASS_PQP_BIN:-pass-pqp}"
 # means the wrapper falls back to `pqp` on PATH (fine when launched from a
 # shell, usually not when launched by the browser).
 PASS_PQP_PQP_BIN="${PASS_PQP_PQP_BIN:-}"
+# External passphrase prompt tool (pinentry, ssh-askpass, ...), forwarded to
+# the decryption as --password-tool. Used when PASS_PQP_NO_PASSPHRASE is off.
+PASS_PQP_PASSWORD_TOOL="${PASS_PQP_PASSWORD_TOOL:-}"
 PREFIX="${PASSWORD_STORE_DIR:-$HOME/.password-store}"
 PREFIX="${PREFIX%/}"
 ENCFILE_SUFFIX=".pqp.enc"
@@ -64,6 +74,7 @@ export PASSWORD_STORE_DIR="$PREFIX"
 # of these and never persist between messages.
 DEF_PASS_PQP_BIN="$PASS_PQP_BIN"
 DEF_PASS_PQP_PQP_BIN="$PASS_PQP_PQP_BIN"
+DEF_PASS_PQP_PASSWORD_TOOL="$PASS_PQP_PASSWORD_TOOL"
 DEF_PREFIX="$PREFIX"
 DEF_NO_PASSPHRASE="$PASS_PQP_NO_PASSPHRASE"
 
@@ -166,6 +177,10 @@ cmd_fetch() {
 		return
 	}
 	TMP_FILES="$TMP_FILES $tmp_out $tmp_err"
+	if [ "$PASS_PQP_NO_PASSPHRASE" != "1" ] && [ -z "$PASS_PQP_PASSWORD_TOOL" ]; then
+		send_error "Fetch requires either no-passphrase or a password tool (one of both is mandatory)"
+		return
+	fi
 	detect_bin_style
 	if [ "$BIN_STYLE" = "raw" ]; then
 		entry_file="$PREFIX/$file$ENCFILE_SUFFIX"
@@ -174,7 +189,11 @@ cmd_fetch() {
 			return
 		}
 		decrypt_opts=""
-		[ "$PASS_PQP_NO_PASSPHRASE" = "1" ] && decrypt_opts="--no-passphrase"
+		if [ "$PASS_PQP_NO_PASSPHRASE" = "1" ]; then
+			decrypt_opts="--no-passphrase"
+		else
+			decrypt_opts="--password-tool $PASS_PQP_PASSWORD_TOOL"
+		fi
 		# shellcheck disable=SC2086
 		"$PASS_PQP_BIN" decrypt $decrypt_opts -o "$tmp_out" "$entry_file" >/dev/null 2>"$tmp_err"
 		rc=$?
@@ -197,8 +216,9 @@ cmd_configure() {
 	no_passphrase=true
 	[ "$PASS_PQP_NO_PASSPHRASE" = "1" ] || no_passphrase=false
 	send_ok "$(jq -nc --arg v "$HOST_VERSION" --arg d "$PREFIX" --arg b "$PASS_PQP_BIN" \
-		--arg p "$PASS_PQP_PQP_BIN" --argjson s "$store_exists" --argjson n "$no_passphrase" \
-		'{version:$v, storeDir:$d, passPqpBin:$b, pqpBin:$p, storeExists:$s, noPassphrase:$n}')"
+		--arg p "$PASS_PQP_PQP_BIN" --arg t "$PASS_PQP_PASSWORD_TOOL" \
+		--argjson s "$store_exists" --argjson n "$no_passphrase" \
+		'{version:$v, storeDir:$d, passPqpBin:$b, pqpBin:$p, passwordTool:$t, storeExists:$s, noPassphrase:$n}')"
 }
 
 # Apply per-message configuration overrides on top of the environment-based
@@ -208,6 +228,7 @@ apply_config() {
 	cfg="$1"
 	PASS_PQP_BIN="$DEF_PASS_PQP_BIN"
 	PASS_PQP_PQP_BIN="$DEF_PASS_PQP_PQP_BIN"
+	PASS_PQP_PASSWORD_TOOL="$DEF_PASS_PQP_PASSWORD_TOOL"
 	PREFIX="$DEF_PREFIX"
 	export PASS_PQP_NO_PASSPHRASE="$DEF_NO_PASSPHRASE"
 	export PASSWORD_STORE_DIR="$PREFIX"
@@ -216,6 +237,11 @@ apply_config() {
 	else
 		unset PASS_PQP_PQP_BIN
 	fi
+	if [ -n "$PASS_PQP_PASSWORD_TOOL" ]; then
+		export PASS_PQP_PASSWORD_TOOL
+	else
+		unset PASS_PQP_PASSWORD_TOOL
+	fi
 	[ -n "$cfg" ] || return 0
 	bin=$(printf '%s' "$cfg" | jq -r '.passPqpBin // empty' 2>/dev/null)
 	[ -n "$bin" ] && PASS_PQP_BIN="$bin"
@@ -223,6 +249,11 @@ apply_config() {
 	if [ -n "$pqbin" ]; then
 		PASS_PQP_PQP_BIN="$pqbin"
 		export PASS_PQP_PQP_BIN
+	fi
+	ptool=$(printf '%s' "$cfg" | jq -r '.passwordTool // empty' 2>/dev/null)
+	if [ -n "$ptool" ]; then
+		PASS_PQP_PASSWORD_TOOL="$ptool"
+		export PASS_PQP_PASSWORD_TOOL
 	fi
 	dir=$(printf '%s' "$cfg" | jq -r '.passwordStoreDir // empty' 2>/dev/null)
 	if [ -n "$dir" ]; then
