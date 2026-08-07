@@ -19,6 +19,7 @@ async function init() {
             return;
         }
         $("passPqpBin").value = response.settings.passPqpBin;
+        $("pqpBin").value = response.settings.pqpBin;
         $("passwordStoreDir").value = response.settings.passwordStoreDir;
         $("noPassphrase").checked = response.settings.noPassphrase;
         renderHostInfo(response.host);
@@ -36,6 +37,7 @@ async function init() {
 async function saveConfig() {
     const settings = {
         passPqpBin: $("passPqpBin").value.trim(),
+        pqpBin: $("pqpBin").value.trim(),
         passwordStoreDir: $("passwordStoreDir").value.trim(),
         noPassphrase: $("noPassphrase").checked,
     };
@@ -72,6 +74,7 @@ function renderHostInfo(host) {
         $("hostVersion").textContent = "\u2014";
         $("hostStoreDir").textContent = "\u2014";
         $("hostBinary").textContent = "\u2014";
+        $("hostPqpBinary").textContent = "\u2014";
         $("hostStoreExists").textContent = "\u2014";
         $("hostNoPassphrase").textContent = "\u2014";
         return;
@@ -79,7 +82,8 @@ function renderHostInfo(host) {
     $("hostError").hidden = true;
     $("hostVersion").textContent = host.version;
     $("hostStoreDir").textContent = host.storeDir;
-    $("hostBinary").textContent = host.passPqpBin;
+    $("hostBinary").textContent = host.passPqpBin || "\u2014";
+    $("hostPqpBinary").textContent = host.pqpBin || "\u2014";
     $("hostStoreExists").textContent = host.storeExists ? "yes" : "no";
     $("hostNoPassphrase").textContent = host.noPassphrase ? "on" : "off";
 }

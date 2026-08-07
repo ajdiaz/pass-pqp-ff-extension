@@ -14,15 +14,27 @@
 #
 #   {"action": "list", "config": {
 #       "passPqpBin": "/path/to/pass-pqp",
+#       "pqpBin": "/path/to/pqp",
 #       "passwordStoreDir": "/path/to/store",
 #       "noPassphrase": true
 #   }}
+#
+# `passPqpBin` may point at either the pass-pqp wrapper or the raw pqp CLI.
+# The host probes the binary once and remembers the result: if the binary
+# exposes a `decrypt` subcommand it is the raw pqp CLI and "fetch" decrypts
+# the entry file directly (the decryption key is located in the keyring
+# automatically); otherwise it is treated as the pass-pqp wrapper and "fetch"
+# runs `show`. When the wrapper is used, `pqpBin` (optional) tells it where the
+# raw pqp CLI lives; the browser environment usually does not have it on PATH.
 #
 # The store paths returned by "list" are relative to the password store root
 # and have the `.pqp.enc` suffix stripped, e.g. "github.com/username".
 #
 # Configuration via environment variables:
-#   PASS_PQP_BIN            path to the pass-pqp binary (default: pass-pqp)
+#   PASS_PQP_BIN            path to the pass-pqp binary or the raw pqp CLI
+#                           (default: pass-pqp)
+#   PASS_PQP_PQP_BIN        path to the raw pqp CLI; exported to the pass-pqp
+#                           wrapper so it can find pqp (default: unset)
 #   PASSWORD_STORE_DIR      password store location (default: ~/.password-store)
 #   PASS_PQP_NO_PASSPHRASE  pass "1" to decrypt without prompting for a
 #                           passphrase (default: "1", requires keys that were
@@ -37,6 +49,10 @@ HOST_NAME="pass_pqp_host"
 HOST_VERSION="0.1.0"
 
 PASS_PQP_BIN="${PASS_PQP_BIN:-pass-pqp}"
+# Path to the raw pqp CLI, exported to pass-pqp wrapper subprocesses. Empty
+# means the wrapper falls back to `pqp` on PATH (fine when launched from a
+# shell, usually not when launched by the browser).
+PASS_PQP_PQP_BIN="${PASS_PQP_PQP_BIN:-}"
 PREFIX="${PASSWORD_STORE_DIR:-$HOME/.password-store}"
 PREFIX="${PREFIX%/}"
 ENCFILE_SUFFIX=".pqp.enc"
@@ -47,6 +63,7 @@ export PASSWORD_STORE_DIR="$PREFIX"
 # Environment-based defaults; per-message "config" overrides are layered on top
 # of these and never persist between messages.
 DEF_PASS_PQP_BIN="$PASS_PQP_BIN"
+DEF_PASS_PQP_PQP_BIN="$PASS_PQP_PQP_BIN"
 DEF_PREFIX="$PREFIX"
 DEF_NO_PASSPHRASE="$PASS_PQP_NO_PASSPHRASE"
 
@@ -102,6 +119,20 @@ send_ok() {
 
 # ---- action handlers -------------------------------------------------------
 
+# Determine whether the configured binary is the raw pqp CLI (exposes a
+# `decrypt` subcommand) or the pass-pqp wrapper (exposes `show`). The probe is
+# run once per distinct binary path and cached in BIN_STYLE ("raw"|"wrapper").
+BIN_STYLE=""
+BIN_STYLE_FOR=""
+detect_bin_style() {
+	[ "$BIN_STYLE_FOR" = "$PASS_PQP_BIN" ] && return 0
+	BIN_STYLE="wrapper"
+	if "$PASS_PQP_BIN" decrypt --help >/dev/null 2>&1; then
+		BIN_STYLE="raw"
+	fi
+	BIN_STYLE_FOR="$PASS_PQP_BIN"
+}
+
 cmd_list() {
 	[ -d "$PREFIX" ] || {
 		send_error "Password store directory not found: $PREFIX"
@@ -129,11 +160,30 @@ cmd_fetch() {
 		send_error "Could not create temporary file"
 		return
 	}
-	TMP_FILES="$TMP_FILES $tmp_out"
-	"$PASS_PQP_BIN" show -- "$file" >"$tmp_out" 2>&1
-	rc=$?
+	tmp_err=$(mktemp) || {
+		send_error "Could not create temporary file"
+		rm -f "$tmp_out"
+		return
+	}
+	TMP_FILES="$TMP_FILES $tmp_out $tmp_err"
+	detect_bin_style
+	if [ "$BIN_STYLE" = "raw" ]; then
+		entry_file="$PREFIX/$file$ENCFILE_SUFFIX"
+		[ -f "$entry_file" ] || {
+			send_error "Could not read entry '$file': no '$file$ENCFILE_SUFFIX' in store"
+			return
+		}
+		decrypt_opts=""
+		[ "$PASS_PQP_NO_PASSPHRASE" = "1" ] && decrypt_opts="--no-passphrase"
+		# shellcheck disable=SC2086
+		"$PASS_PQP_BIN" decrypt $decrypt_opts -o "$tmp_out" "$entry_file" >/dev/null 2>"$tmp_err"
+		rc=$?
+	else
+		"$PASS_PQP_BIN" show -- "$file" >"$tmp_out" 2>&1
+		rc=$?
+	fi
 	if [ $rc -ne 0 ]; then
-		err=$(cat "$tmp_out")
+		err=$(cat "$tmp_err" 2>/dev/null; cat "$tmp_out" 2>/dev/null)
 		send_error "Could not read entry '$file': ${err:-unknown error}"
 		return
 	fi
@@ -147,8 +197,8 @@ cmd_configure() {
 	no_passphrase=true
 	[ "$PASS_PQP_NO_PASSPHRASE" = "1" ] || no_passphrase=false
 	send_ok "$(jq -nc --arg v "$HOST_VERSION" --arg d "$PREFIX" --arg b "$PASS_PQP_BIN" \
-		--argjson s "$store_exists" --argjson n "$no_passphrase" \
-		'{version:$v, storeDir:$d, passPqpBin:$b, storeExists:$s, noPassphrase:$n}')"
+		--arg p "$PASS_PQP_PQP_BIN" --argjson s "$store_exists" --argjson n "$no_passphrase" \
+		'{version:$v, storeDir:$d, passPqpBin:$b, pqpBin:$p, storeExists:$s, noPassphrase:$n}')"
 }
 
 # Apply per-message configuration overrides on top of the environment-based
@@ -157,12 +207,23 @@ cmd_configure() {
 apply_config() {
 	cfg="$1"
 	PASS_PQP_BIN="$DEF_PASS_PQP_BIN"
+	PASS_PQP_PQP_BIN="$DEF_PASS_PQP_PQP_BIN"
 	PREFIX="$DEF_PREFIX"
 	export PASS_PQP_NO_PASSPHRASE="$DEF_NO_PASSPHRASE"
 	export PASSWORD_STORE_DIR="$PREFIX"
+	if [ -n "$PASS_PQP_PQP_BIN" ]; then
+		export PASS_PQP_PQP_BIN
+	else
+		unset PASS_PQP_PQP_BIN
+	fi
 	[ -n "$cfg" ] || return 0
 	bin=$(printf '%s' "$cfg" | jq -r '.passPqpBin // empty' 2>/dev/null)
 	[ -n "$bin" ] && PASS_PQP_BIN="$bin"
+	pqbin=$(printf '%s' "$cfg" | jq -r '.pqpBin // empty' 2>/dev/null)
+	if [ -n "$pqbin" ]; then
+		PASS_PQP_PQP_BIN="$pqbin"
+		export PASS_PQP_PQP_BIN
+	fi
 	dir=$(printf '%s' "$cfg" | jq -r '.passwordStoreDir // empty' 2>/dev/null)
 	if [ -n "$dir" ]; then
 		PREFIX="${dir%/}"

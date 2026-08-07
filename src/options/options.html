@@ -28,8 +28,28 @@
                     spellcheck="false"
                 />
                 <p class="help">
-                    Path to the <code>pass-pqp</code> binary. Defaults to
-                    <code>pass-pqp</code> in your PATH.
+                    Path to the <code>pass-pqp</code> wrapper or to the raw
+                    <code>pqp</code> CLI. The host probes the binary and uses
+                    <code>show</code> for the wrapper or <code>decrypt</code>
+                    for the raw CLI. Defaults to <code>pass-pqp</code> in your
+                    PATH.
+                </p>
+
+                <label for="pqpBin">pqp binary path</label>
+                <input
+                    id="pqpBin"
+                    type="text"
+                    placeholder="pqp"
+                    autocomplete="off"
+                    spellcheck="false"
+                />
+                <p class="help">
+                    Path to the raw <code>pqp</code> CLI. Only needed when
+                    <code>pass-pqp binary path</code> points at the
+                    <code>pass-pqp</code> wrapper, so the wrapper can find
+                    <code>pqp</code> (the browser environment usually does not
+                    have it on PATH). Leave empty to fall back to
+                    <code>pqp</code> on PATH.
                 </p>
 
                 <label for="passwordStoreDir">Password store directory</label>
@@ -70,6 +90,8 @@
                     <dd id="hostStoreDir">&hellip;</dd>
                     <dt>Effective pass-pqp binary</dt>
                     <dd id="hostBinary">&hellip;</dd>
+                    <dt>Effective pqp binary</dt>
+                    <dd id="hostPqpBinary">&hellip;</dd>
                     <dt>Store exists</dt>
                     <dd id="hostStoreExists">&hellip;</dd>
                     <dt>No-passphrase decryption</dt>

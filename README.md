@@ -57,9 +57,9 @@ invocations:
 
 | Action | CLI call | Returns |
 |---|---|---|
-| `configure` | — | host version, store directory, `pass-pqp` binary path |
+| `configure` | — | host version, store directory, `pass-pqp` / `pqp` binary paths |
 | `list` | `find` over `*.pqp.enc` | every store-relative entry path |
-| `fetch` | `pass-pqp show <entry>` | the decrypted entry contents |
+| `fetch` | `pass-pqp show <entry>`, or `pqp decrypt` when configured with the raw `pqp` CLI | the decrypted entry contents |
 
 The domain matching itself happens in the extension (popup), following the
 browserpass approach.
@@ -164,12 +164,13 @@ Open the extension's preferences via the add-on manager
 
 | Setting | Default | Purpose |
 |---|---|---|
-| `passPqpBin` | *empty* | Path to the `pass-pqp` binary. Empty falls back to `PASS_PQP_BIN` / `pass-pqp`. |
+| `passPqpBin` | *empty* | Path to the `pass-pqp` wrapper **or** the raw `pqp` CLI. Empty falls back to `PASS_PQP_BIN` / `pass-pqp`. The host probes the binary: `show` for the wrapper, `decrypt` for the raw CLI. |
+| `pqpBin` | *empty* | Path to the raw `pqp` CLI. Only needed when `passPqpBin` points at the `pass-pqp` wrapper, so the wrapper can find `pqp` (the browser environment usually does not have it on PATH). Empty falls back to `PASS_PQP_PQP_BIN` / `pqp`. |
 | `passwordStoreDir` | *empty* | Location of the password store. Empty falls back to `PASSWORD_STORE_DIR` / `~/.password-store`. |
 | `noPassphrase` | on | Decrypt without a passphrase prompt (`PASS_PQP_NO_PASSPHRASE=1`). |
 
 The page also probes the host and shows the **effective** store directory,
-binary, and store status — so you can verify your settings immediately.
+binaries, and store status — so you can verify your settings immediately.
 
 Settings are stored with `browser.storage.local` and are merged into **every**
 native host request as a `config` object (see below). The browser never sends
@@ -179,7 +180,8 @@ these settings anywhere except to your own native host.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `PASS_PQP_BIN` | `pass-pqp` | Path to the `pass-pqp` binary. |
+| `PASS_PQP_BIN` | `pass-pqp` | Path to the `pass-pqp` wrapper or the raw `pqp` CLI. |
+| `PASS_PQP_PQP_BIN` | *unset* | Path to the raw `pqp` CLI, exported to `pass-pqp` wrapper subprocesses. |
 | `PASSWORD_STORE_DIR` | `~/.password-store` | Location of the password store. |
 | `PASS_PQP_NO_PASSPHRASE` | `1` | Decrypt without a passphrase prompt. Set to `0` only if you handle prompts yourself (not recommended in the browser). |
 
@@ -193,6 +195,7 @@ message only** — overrides never leak into later messages:
 // request with config override
 {"action": "list", "config": {
     "passPqpBin": "/home/alice/bin/pass-pqp",
+    "pqpBin": "/home/alice/bin/pqp",
     "passwordStoreDir": "/home/alice/passwords",
     "noPassphrase": true
 }}
@@ -207,7 +210,7 @@ message only** — overrides never leak into later messages:
 // request
 {"action": "configure"}
 // response
-{"status": "ok", "version": "0.1.0", "storeDir": "/home/alice/.password-store", "passPqpBin": "pass-pqp", "storeExists": true, "noPassphrase": true}
+{"status": "ok", "version": "0.1.0", "storeDir": "/home/alice/.password-store", "passPqpBin": "pass-pqp", "pqpBin": "/home/alice/bin/pqp", "storeExists": true, "noPassphrase": true}
 ```
 
 The `configure` response reflects the *effective* configuration for that
