@@ -1,15 +1,44 @@
 VERSION ?= $(shell cat .version 2>/dev/null || echo 0.1.0)
 NAME := pass-pqp-ff-extension
 HOST_NAME := pass_pqp_host
-EXTENSION_ID := pass-pqp@localhost
+# Local development ID. AMO rejects "@localhost" IDs for signing, so the
+# sign/publish targets substitute AMO_EXTENSION_ID into a release manifest.
+EXTENSION_ID ?= pass-pqp@localhost
 
 PREFIX ?= /usr/local
 HOST_DIR := $(PREFIX)/lib/$(NAME)
 FIREFOX_NATIVE_DIR := $(HOME)/.mozilla/native-messaging-hosts
 LIBREWOLF_NATIVE_DIR := $(HOME)/.librewolf/native-messaging-hosts
 
+# ---- AMO signing & publishing --------------------------------------
+#
+# Sign the extension with Mozilla's AMO service and publish it on
+# addons.mozilla.org. Requirements:
+#   - web-ext:      npm install --global web-ext
+#   - API keys:     https://addons.mozilla.org/developers/addon/api/key/
+#                   export AMO_API_KEY="user:..." AMO_API_SECRET="..."
+#   - AMO_EXTENSION_ID: the permanent extension ID AMO assigns. AMO does
+#                   not sign "@localhost" IDs, so choose a stable one
+#                   (e.g. pass-pqp@ajdiaz.dev) BEFORE the first submission.
+#                   AMO creates the add-on under that ID and reuses it for
+#                   every later release. After signing, install the native
+#                   host with EXTENSION_ID=$(AMO_EXTENSION_ID) so the
+#                   allowed_extensions entry matches.
+#
+#   make sign       # private, signed .xpi (channel: unlisted)
+#   make publish    # submit to addons.mozilla.org for review/listing
+
+AMO_API_KEY ?=
+AMO_API_SECRET ?=
+AMO_EXTENSION_ID ?=
+AMO_CHANNEL ?= unlisted
+AMO_EXTRA_ARGS ?=
+WEB_EXT ?= web-ext
+SIGN_DIR := dist/release
+
 .PHONY: all build install install-host install-manifest uninstall uninstall-host \
-	uninstall-manifest uninstall-dist write-manifest clean
+	uninstall-manifest uninstall-dist write-manifest clean \
+	release-manifest sign publish
 
 all: build
 
@@ -22,6 +51,37 @@ build:
 	cp -r src/. dist/$(NAME)/
 	(cd dist/$(NAME) && zip -qr ../$(NAME)-$(VERSION).zip .)
 	@echo "Built dist/$(NAME)-$(VERSION).zip"
+
+#######################
+# AMO signing & publishing
+
+release-manifest:
+	@test -n "$(AMO_EXTENSION_ID)" || \
+		{ echo "error: set AMO_EXTENSION_ID (e.g. pass-pqp@ajdiaz.dev)"; exit 1; }
+	@test -n "$(shell command -v $(WEB_EXT) 2>/dev/null)" || \
+		{ echo "error: $(WEB_EXT) not found (npm install --global web-ext)"; exit 1; }
+	@rm -rf $(SIGN_DIR)
+	@mkdir -p $(SIGN_DIR)
+	@cp -r src/. $(SIGN_DIR)/
+	@sed -i "s/pass-pqp@localhost/$(AMO_EXTENSION_ID)/" $(SIGN_DIR)/manifest.json
+	@echo "Prepared release manifest with extension ID: $(AMO_EXTENSION_ID)"
+
+sign: release-manifest
+	@test -n "$(AMO_API_KEY)" || { echo "error: set AMO_API_KEY"; exit 1; }
+	@test -n "$(AMO_API_SECRET)" || { echo "error: set AMO_API_SECRET"; exit 1; }
+	$(WEB_EXT) sign \
+		--source-dir $(SIGN_DIR) \
+		--artifacts-dir web-ext-artifacts \
+		--api-key "$(AMO_API_KEY)" \
+		--api-secret "$(AMO_API_SECRET)" \
+		--channel $(AMO_CHANNEL) \
+		$(AMO_EXTRA_ARGS)
+	@echo "Signed $(NAME)-$(VERSION).xpi (channel: $(AMO_CHANNEL))"
+	@echo "Install the native host with EXTENSION_ID=$(AMO_EXTENSION_ID)"
+
+publish:
+	$(MAKE) --no-print-directory sign AMO_CHANNEL=listed
+	@echo "Submitted $(NAME)-$(VERSION) to addons.mozilla.org for review."
 
 #######################
 # Native host installation
