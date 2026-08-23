@@ -32,9 +32,16 @@ AMO_API_KEY ?=
 AMO_API_SECRET ?=
 AMO_EXTENSION_ID ?=
 AMO_CHANNEL ?= unlisted
+# AMO submission metadata. If AMO_METADATA is empty a default file is
+# generated at $(SIGN_DIR)/amo-metadata.json carrying the license and
+# category below (required for listed/uploaded submissions).
+AMO_METADATA ?=
+AMO_LICENSE ?= MIT
+AMO_CATEGORY ?= privacy-security
 AMO_EXTRA_ARGS ?=
 WEB_EXT ?= web-ext
 SIGN_DIR := dist/release
+AMO_METADATA_FILE := $(or $(AMO_METADATA),$(SIGN_DIR)/amo-metadata.json)
 
 .PHONY: all build install install-host install-manifest uninstall uninstall-host \
 	uninstall-manifest uninstall-dist write-manifest clean \
@@ -64,7 +71,12 @@ release-manifest:
 	@mkdir -p $(SIGN_DIR)
 	@cp -r src/. $(SIGN_DIR)/
 	@sed -i "s/pass-pqp@localhost/$(AMO_EXTENSION_ID)/" $(SIGN_DIR)/manifest.json
+	@if [ -z "$(AMO_METADATA)" ]; then \
+		printf '{\n  "required": {\n    "type": "extension",\n    "categories": ["%s"],\n    "license": "%s"\n  }\n}\n' \
+			"$(AMO_CATEGORY)" "$(AMO_LICENSE)" > "$(AMO_METADATA_FILE)"; \
+	fi
 	@echo "Prepared release manifest with extension ID: $(AMO_EXTENSION_ID)"
+	@echo "AMO metadata: $(AMO_METADATA_FILE) (license: $(AMO_LICENSE))"
 
 sign: release-manifest
 	@test -n "$(AMO_API_KEY)" || { echo "error: set AMO_API_KEY"; exit 1; }
@@ -75,6 +87,7 @@ sign: release-manifest
 		--api-key "$(AMO_API_KEY)" \
 		--api-secret "$(AMO_API_SECRET)" \
 		--channel $(AMO_CHANNEL) \
+		--amo-metadata "$(AMO_METADATA_FILE)" \
 		$(AMO_EXTRA_ARGS)
 	@echo "Signed $(NAME)-$(VERSION).xpi (channel: $(AMO_CHANNEL))"
 	@echo "Install the native host with EXTENSION_ID=$(AMO_EXTENSION_ID)"
