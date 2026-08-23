@@ -39,6 +39,7 @@ AMO_CHANNEL ?= unlisted
 # $(SIGN_DIR)/amo-metadata.json carrying the license below.
 AMO_METADATA ?=
 AMO_LICENSE ?= MIT
+AMO_CATEGORY ?= privacy-security
 AMO_EXTRA_ARGS ?=
 WEB_EXT ?= web-ext
 SIGN_DIR := dist/release
@@ -73,8 +74,8 @@ release-manifest:
 	@cp -r src/. $(SIGN_DIR)/
 	@sed -i "s/pass-pqp@localhost/$(AMO_EXTENSION_ID)/" $(SIGN_DIR)/manifest.json
 	@if [ -z "$(AMO_METADATA)" ]; then \
-		printf '{\n  "version": {\n    "license": "%s"\n  }\n}\n' \
-			"$(AMO_LICENSE)" > "$(AMO_METADATA_FILE)"; \
+		printf '{\n  "version": {\n    "license": "%s"\n  },\n  "categories": {\n    "firefox": ["%s"]\n  }\n}\n' \
+			"$(AMO_LICENSE)" "$(AMO_CATEGORY)" > "$(AMO_METADATA_FILE)"; \
 	fi
 	@echo "Prepared release manifest with extension ID: $(AMO_EXTENSION_ID)"
 	@echo "AMO metadata: $(AMO_METADATA_FILE) (license: $(AMO_LICENSE))"
