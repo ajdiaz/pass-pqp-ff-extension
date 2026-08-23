@@ -32,12 +32,13 @@ AMO_API_KEY ?=
 AMO_API_SECRET ?=
 AMO_EXTENSION_ID ?=
 AMO_CHANNEL ?= unlisted
-# AMO submission metadata. If AMO_METADATA is empty a default file is
-# generated at $(SIGN_DIR)/amo-metadata.json carrying the license and
-# category below (required for listed/uploaded submissions).
+# AMO submission metadata. web-ext passes this JSON directly to the AMO
+# API (spreading it into the request body and merging `version` under
+# `{upload}`), so the `license` field must live at `version.license`.
+# If AMO_METADATA is empty a default file is generated at
+# $(SIGN_DIR)/amo-metadata.json carrying the license below.
 AMO_METADATA ?=
 AMO_LICENSE ?= MIT
-AMO_CATEGORY ?= privacy-security
 AMO_EXTRA_ARGS ?=
 WEB_EXT ?= web-ext
 SIGN_DIR := dist/release
@@ -72,8 +73,8 @@ release-manifest:
 	@cp -r src/. $(SIGN_DIR)/
 	@sed -i "s/pass-pqp@localhost/$(AMO_EXTENSION_ID)/" $(SIGN_DIR)/manifest.json
 	@if [ -z "$(AMO_METADATA)" ]; then \
-		printf '{\n  "required": {\n    "type": "extension",\n    "categories": ["%s"],\n    "license": "%s"\n  }\n}\n' \
-			"$(AMO_CATEGORY)" "$(AMO_LICENSE)" > "$(AMO_METADATA_FILE)"; \
+		printf '{\n  "version": {\n    "license": "%s"\n  }\n}\n' \
+			"$(AMO_LICENSE)" > "$(AMO_METADATA_FILE)"; \
 	fi
 	@echo "Prepared release manifest with extension ID: $(AMO_EXTENSION_ID)"
 	@echo "AMO metadata: $(AMO_METADATA_FILE) (license: $(AMO_LICENSE))"
