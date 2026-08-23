@@ -19,7 +19,7 @@ LIBREWOLF_NATIVE_DIR := $(HOME)/.librewolf/native-messaging-hosts
 #                   export AMO_API_KEY="user:..." AMO_API_SECRET="..."
 #   - AMO_EXTENSION_ID: the permanent extension ID AMO assigns. AMO does
 #                   not sign "@localhost" IDs, so choose a stable one
-#                   (e.g. pass-pqp@ajdiaz.dev) BEFORE the first submission.
+#                   (e.g. pass-pqp@ajdiaz.me) BEFORE the first submission.
 #                   AMO creates the add-on under that ID and reuses it for
 #                   every later release. After signing, install the native
 #                   host with EXTENSION_ID=$(AMO_EXTENSION_ID) so the
@@ -57,7 +57,7 @@ build:
 
 release-manifest:
 	@test -n "$(AMO_EXTENSION_ID)" || \
-		{ echo "error: set AMO_EXTENSION_ID (e.g. pass-pqp@ajdiaz.dev)"; exit 1; }
+		{ echo "error: set AMO_EXTENSION_ID (e.g. pass-pqp@ajdiaz.me)"; exit 1; }
 	@test -n "$(shell command -v $(WEB_EXT) 2>/dev/null)" || \
 		{ echo "error: $(WEB_EXT) not found (npm install --global web-ext)"; exit 1; }
 	@rm -rf $(SIGN_DIR)
