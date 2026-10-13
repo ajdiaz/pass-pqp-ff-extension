@@ -15,7 +15,8 @@ the **search box** to filter the whole store by name.
 
 - 🔎 **Domain matching with globs** — entries like `github.com/username` match
   the current host; `*.example.com/service` matches any subdomain of
-  `example.com`.
+  `example.com`, and nested stores such as `sites/a/facebook.com` match
+  `www.facebook.com` too.
 - 🔍 **Search the whole store** — when no entry matches the current domain (or
   any time), type in the popup's search box to filter every entry by name
   (case-insensitive substring).
@@ -141,18 +142,24 @@ up.
 
 ## 🎯 How matching works
 
-Entries are stored in `pass` convention: the first path segment is the domain
-and is matched against the current hostname:
+Entries are stored in `pass` convention; a segment of the entry path that looks
+like a domain (contains a dot) is matched against the current hostname. The
+domain segment does **not** have to be the first one, so entries organized in
+subdirectories are found as well:
 
 - `github.com/username` → matches host `github.com`.
 - `login.github.com/admin` → matches host `login.github.com`.
 - `example.com/team` → also matches host `www.example.com` (subdomain rule).
 - `*.example.com/service` → matches any subdomain of `example.com` (glob `*`
   and `?` are supported).
+- `sites/a/facebook.com` → matches host `www.facebook.com` (the domain can be
+  any path segment).
 
 The extension also matches entries when the current host is a **subdomain** of
 the entry's domain segment, so a single `example.com/…` entry covers
-`www.example.com`.
+`www.example.com`. Segments without a dot (e.g. a `localhost` entry) only match
+a single-label hostname exactly and never act as a wildcard, so plain
+directory names such as `personal/notes` do not match unrelated sites.
 
 ## 🗂️ Entry format
 

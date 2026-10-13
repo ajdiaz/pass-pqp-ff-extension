@@ -142,16 +142,41 @@ function matchesDomain(pattern, hostname) {
 }
 
 /**
- * Check whether a store entry path matches the current hostname. The first
- * path segment is treated as the domain pattern.
+ * Check whether a single path segment matches the current hostname.
  *
- * @param {string} path     Store-relative entry path (e.g. "github.com/user")
+ * A segment that contains a dot is treated as a domain pattern and is matched
+ * against the hostname and its ancestors (so "facebook.com" matches
+ * "www.facebook.com", and globs such as "*.example.com" work). A segment
+ * without a dot (e.g. "localhost" or a username) is only considered for
+ * single-label hostnames and must match the whole hostname exactly, so plain
+ * directory names never act as wildcards.
+ *
+ * @param {string} segment  Entry path segment (may contain globs)
+ * @param {string} hostname Current hostname
+ * @return {boolean} True when the segment matches the hostname
+ */
+function matchesSegment(segment, hostname) {
+    if (segment.includes(".")) {
+        return matchesDomain(segment, hostname);
+    }
+    return !hostname.includes(".") && globToRegExp(segment).test(hostname);
+}
+
+/**
+ * Check whether a store entry path matches the current hostname.
+ *
+ * Every path segment is inspected, so the domain may live at any depth, e.g.
+ * "sites/a/facebook.com" matches "www.facebook.com" just like the flat
+ * "facebook.com/user" form. A single entry matches when any of its segments
+ * matches the hostname.
+ *
+ * @param {string} path     Store-relative entry path (e.g. "sites/facebook.com")
  * @param {string} hostname Current hostname
  * @return {boolean} True when the entry matches
  */
 function matchesEntryPath(path, hostname) {
-    const segment = path.split("/")[0];
-    return segment.length > 0 && matchesDomain(segment, hostname);
+    const segments = path.split("/").filter((segment) => segment.length > 0);
+    return segments.some((segment) => matchesSegment(segment, hostname));
 }
 
 /**
