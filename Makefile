@@ -3,8 +3,16 @@ VERSION ?= $(shell cat .version 2>/dev/null || echo 0.1.0)
 BUMP ?=
 NAME := pass-pqp-ff-extension
 HOST_NAME := pass_pqp_host
-# Local development ID. AMO rejects "@localhost" IDs for signing, so the
-# sign/publish targets substitute AMO_EXTENSION_ID into a release manifest.
+# Extension ID(s) allowed to talk to the native host. Firefox refuses to
+# launch the host when the caller's ID is not in the manifest's
+# allowed_extensions array ("No such native application"), so this must list
+# every build in use: the local development ID and the permanent ID assigned
+# by AMO. Accepts one ID, or several separated by spaces or commas.
+#
+#   make install-manifest EXTENSION_ID="pass-pqp@localhost pass-pqp@ajdiaz.me"
+#
+# AMO rejects "@localhost" IDs for signing, so the sign/publish targets
+# substitute AMO_EXTENSION_ID into a release manifest.
 EXTENSION_ID ?= pass-pqp@localhost
 
 PREFIX ?= /usr/local
@@ -147,11 +155,18 @@ install-manifest-librewolf:
 	$(MAKE) --no-print-directory write-manifest DEST=$(LIBREWOLF_NATIVE_DIR)
 
 write-manifest:
-	@sed \
-		-e 's|__HOST_PATH__|$(HOST_DIR)/pass-pqp-host.sh|' \
-		-e 's|__EXTENSION_ID__|$(EXTENSION_ID)|' \
+	@ids=$$(printf '%s' "$(EXTENSION_ID)" | tr ',' ' '); \
+	test -n "$$ids" || { echo "error: EXTENSION_ID is empty"; exit 1; }; \
+	allowed="["; sep=""; \
+	for id in $$ids; do \
+		allowed="$$allowed$$sep\"$$id\""; sep=","; \
+	done; \
+	allowed="$$allowed]"; \
+	sed \
+		-e "s|__HOST_PATH__|$(HOST_DIR)/pass-pqp-host.sh|" \
+		-e "s|__ALLOWED_EXTENSIONS__|$$allowed|" \
 		native/pass-pqp-host.json.in > $(DEST)/$(HOST_NAME).json
-	@echo "Installed native manifest: $(DEST)/$(HOST_NAME).json"
+	@echo "Installed native manifest: $(DEST)/$(HOST_NAME).json (allowed: $(EXTENSION_ID))"
 
 #######################
 # Uninstall

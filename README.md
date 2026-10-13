@@ -327,6 +327,34 @@ manual check:
 $ printf '\x1c\x00\x00\x00{"action":"configure"}' | native/pass-pqp-host.sh
 ```
 
+### Extension ID & the native host
+
+Firefox launches a native messaging host only when the calling extension's ID
+is listed in the manifest's `allowed_extensions`. Otherwise the launch is
+aborted with **"No such native application"** — the popup reports *Unable to
+reach the pass-pqp native host* and no entry can be listed, copied or
+autofilled. Two IDs are in play:
+
+| Build | Extension ID | Where it comes from |
+|---|---|---|
+| Local development (`dist/`, loaded via `about:debugging`) | `pass-pqp@localhost` | `src/manifest.json` |
+| Signed / published on AMO | `AMO_EXTENSION_ID` (e.g. `pass-pqp@ajdiaz.me`) | substituted by `make sign` |
+
+`EXTENSION_ID` accepts a space- or comma-separated list, so allow both at once
+(no `sudo` needed to write the per-user manifests):
+
+```console
+$ make install-manifest EXTENSION_ID="pass-pqp@localhost pass-pqp@ajdiaz.me"
+```
+
+```json
+"allowed_extensions": ["pass-pqp@localhost","pass-pqp@ajdiaz.me"]
+```
+
+> **Restart the browser after changing the manifest** — Firefox resolves native
+> messaging manifests when it starts. Only `make install-host`, which copies
+> the host script into `$(PREFIX)/lib/`, needs `sudo`.
+
 ### Signing & publishing to addons.mozilla.org
 
 `make sign` produces a private, signed `.xpi` in `web-ext-artifacts/`;
@@ -359,9 +387,10 @@ $ make publish      # listed submission, goes through AMO review
 > `make bump` before every submission and never reuse a version.
 >
 > `AMO_EXTENSION_ID` must stay the same forever: it is baked into
-> `browser_specific_settings.gecko.id` and into the native host manifest, so
-> reinstall the host with the same ID (`make install
-> EXTENSION_ID=pass-pqp@ajdiaz.me`).
+> `browser_specific_settings.gecko.id`, and once a version is signed that ID
+> identifies the add-on for every later release. Add it to the native manifest
+> next to the development ID (see [Extension ID & the native
+> host](#extension-id--the-native-host)).
 
 ---
 
