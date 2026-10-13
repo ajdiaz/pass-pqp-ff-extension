@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "pass-pqp",
-    "version": "0.1.2",
+    "version": "0.1.3",
     "description": "Browse the pass-pqp password store entries that match the current domain and copy usernames and passwords.",
     "author": "pass-pqp",
     "homepage_url": "https://github.com/ajdiaz/pass-pqp-ff-extension",

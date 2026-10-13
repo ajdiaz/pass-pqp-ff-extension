@@ -1,4 +1,6 @@
 VERSION ?= $(shell cat .version 2>/dev/null || echo 0.1.0)
+# Explicit version for `make bump` (defaults to the next patch version).
+BUMP ?=
 NAME := pass-pqp-ff-extension
 HOST_NAME := pass_pqp_host
 # Local development ID. AMO rejects "@localhost" IDs for signing, so the
@@ -45,7 +47,7 @@ WEB_EXT ?= web-ext
 SIGN_DIR := dist/release
 AMO_METADATA_FILE := $(or $(AMO_METADATA),$(SIGN_DIR)/amo-metadata.json)
 
-.PHONY: all build install install-host install-manifest uninstall uninstall-host \
+.PHONY: all build bump install install-host install-manifest uninstall uninstall-host \
 	uninstall-manifest uninstall-dist write-manifest clean \
 	release-manifest sign publish
 
@@ -65,6 +67,27 @@ build:
 	cp -r src/. dist/$(NAME)/
 	(cd dist/$(NAME) && zip -qr ../$(NAME)-$(VERSION).zip .)
 	@echo "Built dist/$(NAME)-$(VERSION).zip"
+
+# Bump the extension version everywhere it is recorded (.version and
+# src/manifest.json). AMO rejects an upload whose version already exists
+# ("409 Version X already exists."), and both `make sign` and `make publish`
+# consume a version, so run this before every submission.
+#
+#   make bump            # next patch version, e.g. 0.1.2 -> 0.1.3
+#   make bump BUMP=0.2.0 # explicit version
+bump:
+	@v="$(BUMP)"; \
+	if [ -z "$$v" ]; then \
+		cur=$$(cat .version 2>/dev/null || echo 0.0.0); \
+		major=$${cur%%.*}; rest=$${cur#*.}; minor=$${rest%%.*}; patch=$${rest##*.}; \
+		v="$$major.$$minor.$$((patch + 1))"; \
+	fi; \
+	printf '%s' "$$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$' || \
+		{ echo "error: version must be x.y.z (got '$$v')"; exit 1; }; \
+	printf '%s' "$$v" > .version; \
+	sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$$v\"/" src/manifest.json; \
+	echo "Bumped to $$v (.version and src/manifest.json)"
+	@$(MAKE) --no-print-directory build
 
 #######################
 # AMO signing & publishing

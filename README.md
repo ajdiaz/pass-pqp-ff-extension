@@ -308,6 +308,7 @@ entry names that are empty, absolute, or contain `..`.
 
 ```console
 $ make build      # package the extension into dist/*.zip
+$ make bump       # bump the version (.version and src/manifest.json)
 $ make install    # install the native host and manifests
 $ make uninstall  # remove every created file (host, manifests, dist/, web-ext-artifacts/)
 $ make clean      # remove build artifacts only (dist/, web-ext-artifacts/)
@@ -325,6 +326,42 @@ manual check:
 ```console
 $ printf '\x1c\x00\x00\x00{"action":"configure"}' | native/pass-pqp-host.sh
 ```
+
+### Signing & publishing to addons.mozilla.org
+
+`make sign` produces a private, signed `.xpi` in `web-ext-artifacts/`;
+`make publish` submits the add-on to AMO for public review. Both need API
+credentials for your Mozilla account:
+
+1. Sign in at <https://addons.mozilla.org> with your Mozilla account.
+2. Open <https://addons.mozilla.org/developers/addon/api/key/> (Developer Hub →
+   **Tools → Manage API Keys**) and click **Generate new credentials**.
+3. Copy **both** values — the secret is shown only once:
+
+   | AMO label | Looks like | Environment variable |
+   |---|---|---|
+   | JWT issuer | `user:12345678:123` | `AMO_API_KEY` |
+   | JWT secret | 64-char hex string | `AMO_API_SECRET` |
+
+```console
+$ export AMO_API_KEY="user:12345678:123"
+$ export AMO_API_SECRET="634f34bee43611d2f3c0fd8c06220ac780cff681a578092001183ab62c04e009"
+$ export AMO_EXTENSION_ID="pass-pqp@ajdiaz.me"   # AMO refuses to sign @localhost IDs
+
+$ make bump         # 0.1.2 -> 0.1.3 (required before every submission)
+$ make sign         # unlisted, signed .xpi -> web-ext-artifacts/
+$ make publish      # listed submission, goes through AMO review
+```
+
+> **AMO rejects an upload whose version already exists** — submitting the same
+> version twice fails with `Submission failed (2): 409 Version X already
+> exists.`, because `make sign` and `make publish` both consume a version. Run
+> `make bump` before every submission and never reuse a version.
+>
+> `AMO_EXTENSION_ID` must stay the same forever: it is baked into
+> `browser_specific_settings.gecko.id` and into the native host manifest, so
+> reinstall the host with the same ID (`make install
+> EXTENSION_ID=pass-pqp@ajdiaz.me`).
 
 ---
 
