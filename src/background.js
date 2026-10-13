@@ -1,5 +1,23 @@
 "use strict";
 
+// Background page of the pass-pqp extension.
+//
+// It owns every long-running operation (listing the store, decrypting an
+// entry, copying a field to the clipboard and filling a page's login form) so
+// they survive the popup being dismissed. The popup is closed by the browser
+// as soon as an external passphrase prompt (pinentry, ssh-askpass, ...)
+// steals focus, long before the native host replies, so a copy started in the
+// popup would otherwise be cancelled.
+//
+// Results produced while the popup was closed are stored in
+// `browser.storage.session` and shown the next time the popup opens; failures
+// are additionally announced with a desktop notification and the toolbar
+// badge, so a wrong passphrase never fails silently.
+//
+// The browser does not let a background page call the passphrase prompt
+// itself: all store access is delegated to the `pass_pqp_host` native
+// messaging host (see native/pass-pqp-host.sh).
+
 // Native messaging host name; must match the "name" field of the installed
 // native messaging manifest (see native/pass-pqp-host.json.in).
 const HOST_NAME = "pass_pqp_host";
@@ -17,6 +35,28 @@ const DEFAULT_SETTINGS = {
     passwordStoreDir: "",
     noPassphrase: true,
 };
+
+// Name of the runtime port every open popup connects to. The background uses
+// it to tell whether the outcome of a copy/autofill can still be shown in the
+// popup or has to be announced with a desktop notification instead.
+const POPUP_PORT = "popup";
+
+// Notification id reused for every failure so a new error replaces the
+// previous message instead of stacking up.
+const NOTIFICATION_ID = "pass-pqp-result";
+
+// Popup documents currently connected to this background page.
+const popupPorts = new Set();
+
+browser.runtime.onConnect.addListener((port) => {
+    if (port.name !== POPUP_PORT) {
+        return;
+    }
+    popupPorts.add(port);
+    port.onDisconnect.addListener(() => {
+        popupPorts.delete(port);
+    });
+});
 
 // Route messages coming from the popup or options page to the native
 // messaging host.
@@ -60,9 +100,18 @@ async function handleMessage(message, sendResponse) {
                 break;
             case "copyEntry":
                 response = await copyEntry(message.file, message.field);
+                await recordResult("copy", message.file, response, message.field);
                 break;
             case "autofillEntry":
                 response = await autofillEntry(message.file);
+                await recordResult("autofill", message.file, response);
+                break;
+            case "getLastResult":
+                response = await takeLastResult();
+                break;
+            case "clearLastResult":
+                await clearResult();
+                response = { status: "ok" };
                 break;
             case "getConfig":
                 response = await getConfig();
@@ -99,6 +148,110 @@ function safeRespond(sendResponse, response) {
         sendResponse(response);
     } catch (e) {
         // The receiver is gone; nothing to do.
+    }
+}
+
+/**
+ * @return {boolean} True while at least one popup document is connected.
+ */
+function popupIsOpen() {
+    return popupPorts.size > 0;
+}
+
+/**
+ * Persist the outcome of a background copy/autofill so the popup can present
+ * it the next time it opens. When the popup is already gone (the common case
+ * with a focus-stealing passphrase prompt) a failure is surfaced immediately
+ * through a desktop notification and the toolbar badge.
+ *
+ * @param {string} kind      "copy" or "autofill"
+ * @param {string} file      Entry path the operation worked on
+ * @param {object} response  Status object returned by the operation
+ * @param {string} [field]   Field that was copied ("user"/"password")
+ * @return {Promise<void>}
+ */
+async function recordResult(kind, file, response, field) {
+    const result = {
+        id: Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8),
+        kind,
+        file,
+        field: field || "",
+        status: response.status,
+        message: response.message || "",
+        timestamp: Date.now(),
+    };
+    try {
+        await browser.storage.session.set({ lastResult: result });
+    } catch (e) {
+        // storage.session is best-effort: never fail the operation over it.
+    }
+    if (response.status !== "ok" && !popupIsOpen()) {
+        await notifyResult(result);
+    }
+}
+
+/**
+ * Surface a failed background operation through a desktop notification and
+ * the toolbar badge, so a wrong passphrase or a missing key is still reported
+ * after the popup has been dismissed.
+ *
+ * @param {object} result Recorded result object
+ * @return {Promise<void>}
+ */
+async function notifyResult(result) {
+    try {
+        await browser.action.setBadgeBackgroundColor({ color: "#cc0000" });
+        await browser.action.setBadgeText({ text: "!" });
+    } catch (e) {
+        // Badges are cosmetic; keep going.
+    }
+    try {
+        await browser.notifications.create(NOTIFICATION_ID, {
+            type: "basic",
+            iconUrl: browser.runtime.getURL("icons/icon.svg"),
+            title: "pass-pqp",
+            message: result.message || "The operation failed",
+        });
+    } catch (e) {
+        // Notifications may be unavailable; the badge and the toast shown the
+        // next time the popup opens still carry the message.
+    }
+}
+
+/**
+ * Return the recorded result (if any) and clear it together with the error
+ * badge. The popup calls this every time it opens, so a result produced while
+ * the popup was closed is shown exactly once.
+ *
+ * @return {Promise<{status: string, result: object|null}>}
+ */
+async function takeLastResult() {
+    let result = null;
+    try {
+        const stored = await browser.storage.session.get({ lastResult: null });
+        result = stored.lastResult || null;
+    } catch (e) {
+        result = null;
+    }
+    await clearResult();
+    return { status: "ok", result };
+}
+
+/**
+ * Drop any recorded result and clear the toolbar badge.
+ *
+ * @return {Promise<void>}
+ */
+async function clearResult() {
+    try {
+        await browser.storage.session.remove("lastResult");
+    } catch (e) {
+        // Ignore: nothing to clear.
+    }
+    try {
+        await browser.action.setBadgeText({ text: "" });
+    } catch (e) {
+        // Ignore: no badge support.
     }
 }
 

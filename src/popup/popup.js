@@ -26,6 +26,12 @@ let toastTimer = null;
 let currentHostname = null;
 let allFiles = [];
 
+// Keep a runtime port open for as long as the popup lives. The background uses
+// it to decide whether a result can still be shown here or has to be announced
+// with a desktop notification because the popup is already gone. The binding
+// also keeps the port from being garbage collected while the popup is open.
+const popupPort = browser.runtime.connect({ name: "popup" });
+
 init();
 
 /**
@@ -38,6 +44,8 @@ async function init() {
     try {
         currentHostname = await getCurrentHostname();
         $("domain").textContent = currentHostname || "No domain";
+
+        await showPendingResult();
 
         const hostCheck = await browser.runtime.sendMessage({ action: "checkHost" });
         if (hostCheck.status !== "ok") {
@@ -335,6 +343,7 @@ async function copyField(path, field) {
         file: path,
         field,
     });
+    await forgetPendingResult();
     if (response.status !== "ok") {
         showToast("Error: " + response.message);
         return;
@@ -357,11 +366,61 @@ async function autofillField(path) {
         action: "autofillEntry",
         file: path,
     });
+    await forgetPendingResult();
     if (response.status !== "ok") {
         showToast("Error: " + response.message);
         return;
     }
     showToast("Autofilled " + path);
+}
+
+/**
+ * Show the outcome of a background copy/autofill that finished while the popup
+ * was closed (typically because a passphrase prompt took focus). The result is
+ * consumed by the background, so it is only presented once.
+ *
+ * @return {Promise<void>}
+ */
+async function showPendingResult() {
+    let response;
+    try {
+        response = await browser.runtime.sendMessage({ action: "getLastResult" });
+    } catch (e) {
+        return;
+    }
+    if (response && response.result) {
+        showToast(describeResult(response.result));
+    }
+}
+
+/**
+ * Drop the recorded result once this popup has shown the outcome itself, so it
+ * is not repeated the next time the popup opens.
+ *
+ * @return {Promise<void>}
+ */
+async function forgetPendingResult() {
+    try {
+        await browser.runtime.sendMessage({ action: "clearLastResult" });
+    } catch (e) {
+        // The background may already be gone; nothing to clear then.
+    }
+}
+
+/**
+ * Build a human readable message for a recorded background result.
+ *
+ * @param {object} result Recorded result object
+ * @return {string} Message for the toast
+ */
+function describeResult(result) {
+    if (result.status === "ok") {
+        if (result.kind === "copy") {
+            return "Copied " + (result.field || "value") + " from " + result.file;
+        }
+        return "Autofilled " + result.file;
+    }
+    return "Error: " + (result.message || "the operation failed");
 }
 
 /**

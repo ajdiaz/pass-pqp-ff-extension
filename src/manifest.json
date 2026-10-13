@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "pass-pqp",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "description": "Browse the pass-pqp password store entries that match the current domain and copy usernames and passwords.",
     "author": "pass-pqp",
     "homepage_url": "https://github.com/ajdiaz/pass-pqp-ff-extension",
@@ -40,5 +40,12 @@
         "96": "icons/icon.svg",
         "128": "icons/icon.svg"
     },
-    "permissions": ["activeTab", "tabs", "nativeMessaging", "clipboardWrite", "storage"]
+    "permissions": [
+        "activeTab",
+        "tabs",
+        "nativeMessaging",
+        "clipboardWrite",
+        "notifications",
+        "storage"
+    ]
 }

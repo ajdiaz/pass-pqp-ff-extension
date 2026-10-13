@@ -55,6 +55,11 @@ all: build
 # Packaging
 
 build:
+	@if [ -e dist ] && [ ! -w dist ]; then \
+		echo "error: dist/ is not writable (owned by another user, e.g. root)."; \
+		echo "       fix it with: sudo chown -R $$(id -u):$$(id -g) dist"; \
+		exit 1; \
+	fi
 	rm -rf dist/$(NAME)
 	mkdir -p dist/$(NAME)
 	cp -r src/. dist/$(NAME)/

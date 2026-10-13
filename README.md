@@ -25,6 +25,9 @@ the **search box** to filter the whole store by name.
 - 🪟 **Prompt-safe actions** — copying and autofilling run in the background
   script, so they still complete when an external passphrase prompt
   (`pinentry`, `ssh-askpass`, …) steals focus and the popup closes.
+- 🔔 **Errors are never silent** — a wrong passphrase (or any other failure)
+  raises a desktop notification and a red `!` badge on the toolbar icon while
+  the popup is closed, and is shown as a toast the next time the popup opens.
 - 🔐 **Native messaging** — a thin native host bridges the extension to the
   real `pass-pqp` binary; the store is never touched by the browser directly.
 - 🦊 **Firefox + LibreWolf** — targets the latest Firefox and stays compatible
@@ -160,6 +163,13 @@ CLI rather than the `pass-pqp` wrapper: the wrapper forwards the tool through
 the environment and splits it on whitespace. The native host passes the whole
 tool command to `pqp` as a single `--password-tool` value.
 
+**Failures are reported even when the popup is gone.** A wrong passphrase, a
+missing key or an unreachable host raises a desktop notification and sets a red
+`!` badge on the toolbar icon, because the popup has already been closed by the
+browser. The outcome (success or failure) is also stored and shown as a toast
+the next time the popup opens, and the badge is cleared. When the popup happens
+to stay open, the message is shown inline instead and no notification is sent.
+
 ---
 
 ## 🎯 How matching works
@@ -285,7 +295,8 @@ entry names that are empty, absolute, or contain `..`.
   so one of the two is mandatory.
 - **Minimal host permissions.** The extension needs `tabs`/`activeTab` to read
   the current URL, `nativeMessaging` to reach the host, `clipboardWrite` to
-  copy, and `storage` for the options. The autofill content script runs on
+  copy, `notifications` to report failures after the popup closes, and
+  `storage` for the options. The autofill content script runs on
   every page (`<all_urls>`) but only acts on explicit autofill messages sent
   by the popup — it reads or modifies page content only when you click the
   autofill button.
@@ -301,6 +312,12 @@ $ make install    # install the native host and manifests
 $ make uninstall  # remove every created file (host, manifests, dist/, web-ext-artifacts/)
 $ make clean      # remove build artifacts only (dist/, web-ext-artifacts/)
 ```
+
+> **Note** — if `make build` reports that `dist/` is not writable, it was
+> created by a previous `sudo make build`. Fix the ownership once with
+> `sudo chown -R $(id -u):$(id -g) dist` and rebuild. Always reload the
+> extension from the freshly built `dist/pass-pqp-ff-extension/` directory:
+> an old build silently keeps the previous code.
 
 The native host can be exercised directly with any JSON framing tool; a quick
 manual check:
