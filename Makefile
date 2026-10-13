@@ -3,7 +3,7 @@ NAME := pass-pqp-ff-extension
 HOST_NAME := pass_pqp_host
 # Local development ID. AMO rejects "@localhost" IDs for signing, so the
 # sign/publish targets substitute AMO_EXTENSION_ID into a release manifest.
-EXTENSION_ID ?= pass-pqp@ajdiaz.me
+EXTENSION_ID ?= pass-pqp@localhost
 
 PREFIX ?= /usr/local
 HOST_DIR := $(PREFIX)/lib/$(NAME)
