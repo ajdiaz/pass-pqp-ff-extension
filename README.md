@@ -22,6 +22,9 @@ the **search box** to filter the whole store by name.
   (case-insensitive substring).
 - 📋 **One-click copy** — copy the username or the password straight to the
   clipboard.
+- 🪟 **Prompt-safe actions** — copying and autofilling run in the background
+  script, so they still complete when an external passphrase prompt
+  (`pinentry`, `ssh-askpass`, …) steals focus and the popup closes.
 - 🔐 **Native messaging** — a thin native host bridges the extension to the
   real `pass-pqp` binary; the store is never touched by the browser directly.
 - 🦊 **Firefox + LibreWolf** — targets the latest Firefox and stays compatible
@@ -63,7 +66,10 @@ invocations:
 | `fetch` | `pass-pqp show <entry>`, or `pqp decrypt` when configured with the raw `pqp` CLI (each with `--no-passphrase` or `--password-tool`) | the decrypted entry contents |
 
 The domain matching itself happens in the extension (popup), following the
-browserpass approach.
+browserpass approach. The popup only renders the UI: fetching an entry,
+copying a field to the clipboard, and autofilling a form all run in the
+**background script**, so they survive the popup being closed while an
+external passphrase prompt holds focus.
 
 ---
 
@@ -137,6 +143,22 @@ the first `user:` or `login:` line (e.g. `login: alice` or `user:alice`).
 Other lines are ignored. Values are written with native setters and `input` +
 `change` events are dispatched so framework bindings (React, Vue, …) pick them
 up.
+
+### Passphrase prompts
+
+Decryption is performed by the native host, triggered from the extension's
+**background script** — not from the popup. This matters when the store key is
+passphrase-protected and `passwordTool` is configured: the tool's prompt (a
+pinentry dialog, a terminal prompt, …) takes keyboard focus, which makes the
+browser close the popup. Because the background script owns the work, the
+credential is still copied or the form is still filled once the passphrase is
+accepted; you don't need to reopen the popup.
+
+If your password tool needs arguments (for example
+`pinentry-curses --ttyname=/dev/pts/0`), point `passPqpBin` at the raw `pqp`
+CLI rather than the `pass-pqp` wrapper: the wrapper forwards the tool through
+the environment and splits it on whitespace. The native host passes the whole
+tool command to `pqp` as a single `--password-tool` value.
 
 ---
 

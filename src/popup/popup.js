@@ -1,8 +1,5 @@
 "use strict";
 
-const PASSWORD_KEYS = ["password", "pass", "secret"];
-const USERNAME_KEYS = ["login", "username", "user"];
-
 const $ = (id) => document.getElementById(id);
 
 const ICON_USER = [
@@ -321,129 +318,50 @@ function buildAction(title, iconElements, onClick) {
 }
 
 /**
- * Fetch an entry and copy the requested field to the clipboard.
+ * Ask the background to fetch an entry and copy the requested field to the
+ * clipboard.
+ *
+ * The copy itself happens in the background so it survives this popup being
+ * closed while an external passphrase prompt (pinentry, ssh-askpass, ...)
+ * holds focus.
  *
  * @param {string} path  Entry path
  * @param {string} field "user" or "password"
  * @return {Promise<void>}
  */
 async function copyField(path, field) {
-    const response = await browser.runtime.sendMessage({ action: "fetchEntry", file: path });
+    const response = await browser.runtime.sendMessage({
+        action: "copyEntry",
+        file: path,
+        field,
+    });
     if (response.status !== "ok") {
         showToast("Error: " + response.message);
         return;
     }
-    const entry = parseEntry(response.contents);
-    const value = field === "password" ? entry.password : entry.user || deriveUser(path);
-    if (!value) {
-        showToast("No " + field + " found for " + path);
-        return;
-    }
-    await copyText(value);
     showToast("Copied " + field);
 }
 
 /**
- * Fetch an entry and ask the content script of the current page to fill the
- * login form with its password and username.
+ * Ask the background to fetch an entry and fill the page's login form with its
+ * password and username.
+ *
+ * Like {@link copyField} this runs in the background so a focus-stealing
+ * passphrase prompt cannot cancel it by closing the popup.
  *
  * @param {string} path Entry path
  * @return {Promise<void>}
  */
 async function autofillField(path) {
-    const response = await browser.runtime.sendMessage({ action: "fetchEntry", file: path });
+    const response = await browser.runtime.sendMessage({
+        action: "autofillEntry",
+        file: path,
+    });
     if (response.status !== "ok") {
         showToast("Error: " + response.message);
         return;
     }
-    const entry = parseEntry(response.contents);
-    if (!entry.password) {
-        showToast("No password found for " + path);
-        return;
-    }
-    const autofill = await browser.runtime.sendMessage({
-        action: "autofill",
-        password: entry.password,
-        user: entry.user || "",
-    });
-    if (autofill.status !== "ok") {
-        showToast("Error: " + autofill.message);
-        return;
-    }
     showToast("Autofilled " + path);
-}
-
-/**
- * Parse pass-compatible entry contents into password and user fields.
- *
- * The first non-empty line is the password; lines like "login: user" provide
- * the username. A keyed "password:"/"pass:"/"secret:" line overrides the
- * first line.
- *
- * @param {string} raw Decrypted entry contents
- * @return {{password: string, user: string}} Parsed fields
- */
-function parseEntry(raw) {
-    const lines = raw
-        .split(/[\r\n]+/)
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
-    const entry = { password: "", user: "" };
-    for (const line of lines) {
-        const match = line.match(/^([^:]+):\s*(.*)$/);
-        if (!match) {
-            continue;
-        }
-        const key = match[1].toLowerCase();
-        const value = match[2];
-        if (!entry.user && USERNAME_KEYS.includes(key)) {
-            entry.user = value;
-        }
-        if (!entry.password && PASSWORD_KEYS.includes(key)) {
-            entry.password = value;
-        }
-    }
-    if (!entry.password && lines.length > 0) {
-        entry.password = lines[0];
-    }
-    return entry;
-}
-
-/**
- * Derive a username from the last segment of an entry path.
- *
- * @param {string} path Entry path
- * @return {string} Derived username
- */
-function deriveUser(path) {
-    return path.split("/").pop();
-}
-
-/**
- * Copy text to the clipboard, preferring the async clipboard API and falling
- * back to a hidden textarea with execCommand.
- *
- * @param {string} text Text to copy
- * @return {Promise<void>}
- */
-async function copyText(text) {
-    try {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            await navigator.clipboard.writeText(text);
-            return;
-        }
-    } catch (e) {
-        // fall through to the execCommand fallback
-    }
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.setAttribute("readonly", "");
-    textarea.style.position = "fixed";
-    textarea.style.opacity = "0";
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand("copy");
-    document.body.removeChild(textarea);
 }
 
 /**

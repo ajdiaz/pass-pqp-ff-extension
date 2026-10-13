@@ -31,6 +31,10 @@
 # Decryption requires exactly one of two passphrase modes: either
 # "noPassphrase" (true, empty passphrase keys) or "passwordTool" (an external
 # prompt tool such as pinentry or ssh-askpass). One of the two is mandatory.
+# The whole tool command is forwarded to `pqp decrypt` as a single
+# --password-tool argument, so tools with arguments (e.g.
+# "pinentry-curses --ttyname=/dev/pts/0") are supported when the raw pqp CLI
+# is used.
 #
 # The store paths returned by "list" are relative to the password store root
 # and have the `.pqp.enc` suffix stripped, e.g. "github.com/username".
@@ -188,14 +192,16 @@ cmd_fetch() {
 			send_error "Could not read entry '$file': no '$file$ENCFILE_SUFFIX' in store"
 			return
 		}
-		decrypt_opts=""
+		# Build the decryption options without word-splitting the password
+		# tool: pqp expects the whole tool command (e.g. "pinentry-curses
+		# --ttyname=/dev/pts/0") as a single --password-tool argument and
+		# splits it itself.
 		if [ "$PASS_PQP_NO_PASSPHRASE" = "1" ]; then
-			decrypt_opts="--no-passphrase"
+			set -- --no-passphrase
 		else
-			decrypt_opts="--password-tool $PASS_PQP_PASSWORD_TOOL"
+			set -- --password-tool "$PASS_PQP_PASSWORD_TOOL"
 		fi
-		# shellcheck disable=SC2086
-		"$PASS_PQP_BIN" decrypt $decrypt_opts -o "$tmp_out" "$entry_file" >/dev/null 2>"$tmp_err"
+		"$PASS_PQP_BIN" decrypt "$@" -o "$tmp_out" "$entry_file" >/dev/null 2>"$tmp_err"
 		rc=$?
 	else
 		"$PASS_PQP_BIN" show -- "$file" >"$tmp_out" 2>&1

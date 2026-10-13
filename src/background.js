@@ -4,6 +4,10 @@
 // native messaging manifest (see native/pass-pqp-host.json.in).
 const HOST_NAME = "pass_pqp_host";
 
+// Entry keys recognised when parsing pass-compatible contents.
+const PASSWORD_KEYS = ["password", "pass", "secret"];
+const USERNAME_KEYS = ["login", "username", "user"];
+
 // Default extension settings. Empty strings mean "use the native host
 // default" (environment variable or built-in default).
 const DEFAULT_SETTINGS = {
@@ -54,6 +58,12 @@ async function handleMessage(message, sendResponse) {
                 }
                 response = await autofillPage(message.password, message.user);
                 break;
+            case "copyEntry":
+                response = await copyEntry(message.file, message.field);
+                break;
+            case "autofillEntry":
+                response = await autofillEntry(message.file);
+                break;
             case "getConfig":
                 response = await getConfig();
                 break;
@@ -66,9 +76,29 @@ async function handleMessage(message, sendResponse) {
             default:
                 throw new Error("Unknown action: " + message.action);
         }
+        safeRespond(sendResponse, response);
+    } catch (e) {
+        safeRespond(sendResponse, { status: "error", message: e.message });
+    }
+}
+
+/**
+ * Send a response without letting a closed message channel (typically the
+ * popup being dismissed while a focus-stealing passphrase prompt is shown)
+ * surface as an error. The operation itself has already completed.
+ *
+ * @param {function} sendResponse Response callback
+ * @param {object}   response     Payload to send
+ * @return {void}
+ */
+function safeRespond(sendResponse, response) {
+    if (typeof sendResponse !== "function") {
+        return;
+    }
+    try {
         sendResponse(response);
     } catch (e) {
-        sendResponse({ status: "error", message: e.message });
+        // The receiver is gone; nothing to do.
     }
 }
 
@@ -208,4 +238,139 @@ async function autofillPage(password, user) {
                 e.message,
         };
     }
+}
+
+/**
+ * Fetch an entry from the native host and copy one of its fields to the
+ * clipboard.
+ *
+ * This runs in the background on purpose: when decryption uses an external
+ * passphrase tool (pinentry, ssh-askpass, ...) the prompt steals focus and the
+ * popup is closed by the browser long before the host replies. Doing the copy
+ * here means the operation still completes after the popup is gone.
+ *
+ * @param {string} file  Store-relative entry path
+ * @param {string} field "user" or "password"
+ * @return {Promise<object>} Status object from the host/copy step
+ */
+async function copyEntry(file, field) {
+    if (typeof file !== "string" || file.length === 0) {
+        throw new Error("copyEntry requires a non-empty file");
+    }
+    if (field !== "user" && field !== "password") {
+        throw new Error("copyEntry requires field 'user' or 'password'");
+    }
+    const response = await sendHostRequest({ action: "fetch", file });
+    if (response.status !== "ok") {
+        return response;
+    }
+    const entry = parseEntry(response.contents);
+    const value = field === "password" ? entry.password : entry.user || deriveUser(file);
+    if (!value) {
+        return { status: "error", message: "No " + field + " found for " + file };
+    }
+    await writeClipboard(value);
+    return { status: "ok", field };
+}
+
+/**
+ * Fetch an entry from the native host and autofill the active page's login
+ * form with it.
+ *
+ * Like {@link copyEntry}, this lives in the background so a focus-stealing
+ * passphrase prompt cannot cancel it by closing the popup.
+ *
+ * @param {string} file Store-relative entry path
+ * @return {Promise<object>} Status object from the host/autofill step
+ */
+async function autofillEntry(file) {
+    if (typeof file !== "string" || file.length === 0) {
+        throw new Error("autofillEntry requires a non-empty file");
+    }
+    const response = await sendHostRequest({ action: "fetch", file });
+    if (response.status !== "ok") {
+        return response;
+    }
+    const entry = parseEntry(response.contents);
+    if (!entry.password) {
+        return { status: "error", message: "No password found for " + file };
+    }
+    return autofillPage(entry.password, entry.user || "");
+}
+
+/**
+ * Copy text to the clipboard from the background context.
+ *
+ * The async clipboard API is tried first, but a background page is normally
+ * not focused so it falls back to a synthetic `copy` event + `execCommand`,
+ * which is the only reliable clipboard path outside the popup.
+ *
+ * @param {string} text Text to copy
+ * @return {Promise<void>}
+ */
+async function writeClipboard(text) {
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+            return;
+        }
+    } catch (e) {
+        // fall through to the execCommand fallback
+    }
+    const listener = (event) => {
+        event.clipboardData.setData("text/plain", text);
+        event.preventDefault();
+    };
+    document.addEventListener("copy", listener, { once: true });
+    try {
+        document.execCommand("copy");
+    } finally {
+        document.removeEventListener("copy", listener);
+    }
+}
+
+/**
+ * Parse pass-compatible entry contents into password and user fields.
+ *
+ * The first non-empty line is the password; lines like "login: user" provide
+ * the username. A keyed "password:"/"pass:"/"secret:" line overrides the
+ * first line.
+ *
+ * @param {string} raw Decrypted entry contents
+ * @return {{password: string, user: string}} Parsed fields
+ */
+function parseEntry(raw) {
+    const lines = raw
+        .split(/[\r\n]+/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+    const entry = { password: "", user: "" };
+    for (const line of lines) {
+        const match = line.match(/^([^:]+):\s*(.*)$/);
+        if (!match) {
+            continue;
+        }
+        const key = match[1].toLowerCase();
+        const value = match[2];
+        if (!entry.user && USERNAME_KEYS.includes(key)) {
+            entry.user = value;
+        }
+        if (!entry.password && PASSWORD_KEYS.includes(key)) {
+            entry.password = value;
+        }
+    }
+    if (!entry.password && lines.length > 0) {
+        entry.password = lines[0];
+    }
+    return entry;
+}
+
+/**
+ * Derive a username from the last segment of an entry path.
+ *
+ * @param {string} path Entry path
+ * @return {string} Derived username
+ */
+function deriveUser(path) {
+    return path.split("/").pop();
 }
